@@ -3,11 +3,6 @@
   "instructions": [
     "AGENTS.md"
   ],
-  "skills": {
-    "paths": [
-      ".opencode/skills"
-    ]
-  },
   "permission": {
     "bash": "allow"
   },
