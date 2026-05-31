@@ -26,13 +26,5 @@
         "chunkTimeout": 60000
       }
     },
-    "google": {
-      "options": {
-        "apiKey": "{env:GEMINI_API_KEY}",
-        "timeout": 300000,
-        "chunkTimeout": 60000
-      }
-    }
-  },
   "model": "opencode/deepseek-v4-flash-free"
 }
