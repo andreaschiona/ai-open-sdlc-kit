@@ -20,6 +20,7 @@
         "timeout": 300000,
         "chunkTimeout": 60000
       }
-    },
+    }
+  },
   "model": "opencode/deepseek-v4-flash-free"
 }
