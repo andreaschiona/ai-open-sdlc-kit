@@ -6,119 +6,44 @@ on:
   pull_request_review_comment:
     types: [created]
 
-concurrency:
-  group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.reply_to_id }}-${{ contains(github.event.comment.body, '/oc') && 'cmd' || 'other' }}
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  pull-requests: write 
-  issues: write        
-
 jobs:
   opencode:
-    if: |
-      github.event.comment != null &&
-      github.event.comment.author_association == 'OWNER' &&
-      github.actor == github.repository_owner &&
-      (
-        contains(github.event.comment.body, ' /oc') ||
-        startsWith(github.event.comment.body, '/oc') ||
-        contains(github.event.comment.body, ' /opencode') ||
-        startsWith(github.event.comment.body, '/opencode')
-      )
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     permissions:
-      id-token: write
       contents: write
-      pull-requests: write
       issues: write
+      pull-requests: write
+      discussions: write
+      id-token: write
+      actions: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # Corretto da v6 a v4
         with:
-          persist-credentials: false
-          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install jq
-        shell: bash
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Get opencode version
-        id: version
-        shell: bash
+      - name: Configure Git
         run: |
-          # Ripristinato l'endpoint API corretto per evitare il fallimento del curl
-          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 | sed 's/^v//')
-          echo "version=${VERSION:-1.15.10}" >> "$GITHUB_OUTPUT"
+          git config --global user.email "opencode-agent[bot]@users.noreply.github.com"
+          git config --global user.name "opencode-agent[bot]"
 
-      - name: Install opencode via NPM
-        shell: bash
-        run: |
-          echo "Installing opencode version: ${{ steps.version.outputs.version }}"
-          # Utilizzo del nome del pacchetto ufficiale 'opencode-ai'
-          npm install -g opencode-ai@${{ steps.version.outputs.version }}
-
-      - name: Determine model from comment
-        id: model_select
-        shell: bash
-        run: |
-          COMMENT="${{ github.event.comment.body }}"
-          if echo "$COMMENT" | grep -qi "GEMINI"; then
-            echo "model=google/gemini-2.5-flash" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMENT" | grep -qi "BIGPICKLE"; then
-            echo "model=opencode/big-pickle" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMENT" | grep -qi "NEMOTRON"; then
-            echo "model=opencode/nemotron-3-super-free" >> "$GITHUB_OUTPUT"
-          else
-            echo "model=opencode/deepseek-v4-flash-free" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run opencode (with retry)
-        shell: bash
-        id: run_opencode
+      - name: Run opencode
+        uses: anomalyco/opencode/github@latest
         env:
-          MODEL: ${{ steps.model_select.outputs.model }}
-          OPENCODE_TELEMETRY: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "Selected model: $MODEL"
+        with:
+          model: opencode/big-pickle
+          use_github_token: true
 
-          jq --arg model "$MODEL" '.model = $model' opencode.json > opencode.tmp.json && mv opencode.tmp.json opencode.json
-          echo "Injected model '$MODEL' into opencode.json"
+      # Questo step garantisce che i file creati da Docker 
+      # siano accessibili a Git per il commit/push
+      - name: Fix permissions for Git
+        if: failure() || success()
+        run: sudo chown -R $USER:$USER ${{ github.workspace }}
 
-          MAX_RETRIES=3
-          RETRY_DELAY=15
-          for i in $(seq 1 $MAX_RETRIES); do
-            echo "opencode run attempt $i of $MAX_RETRIES"
-            
-            # Catturiamo l'output per intercettare i crash fittizi
-            OUTPUT=$(opencode github run 2>&1)
-            echo "$OUTPUT"
-            
-            if echo "$OUTPUT" | grep -q "undefined is not an object"; then
-              echo "Errore critico rilevato: Inizializzazione del client GitHub fallita (Token o App mancante)."
-              exit 1
-            fi
-
-            if echo "$OUTPUT" | grep -q "opencode completed successfully" || [ $? -eq 0 ]; then
-              if [[ "$OUTPUT" != *"Error:"* ]]; then
-                echo "opencode completed successfully"
-                exit 0
-              fi
-            fi
-            
-            if [ $i -eq $MAX_RETRIES ]; then
-              echo "All $MAX_RETRIES attempts failed."
-              exit 1
-            fi
-            echo "Attempt $i failed, retrying in ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
-          done
+      - name: Upload Opencode Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-debug-logs
+          path: /home/runner/.local/share/opencode/log/
