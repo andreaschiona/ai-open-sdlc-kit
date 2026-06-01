@@ -9,10 +9,11 @@ on:
 concurrency:
   group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.reply_to_id }}-${{ contains(github.event.comment.body, '/oc') && 'cmd' || 'other' }}
   cancel-in-progress: true
+
 permissions:
   contents: read
-  pull-requests: write # Necessario per creare commenti
-  issues: write        # Se opencode commenta sulle issue
+  pull-requests: write 
+  issues: write        
 
 jobs:
   opencode:
@@ -44,28 +45,23 @@ jobs:
         shell: bash
         run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Get opencode version
         id: version
         shell: bash
         run: |
-          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
-          echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
+          VERSION=$(curl -sf https://github.com | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 | sed 's/^v//')
+          echo "version=${VERSION:-1.15.10}" >> "$GITHUB_OUTPUT"
 
-      - name: Cache opencode
-        id: cache
-        uses: actions/cache@v5
-        with:
-          path: ~/.opencode/bin
-          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
-
-      - name: Install opencode
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Install opencode via NPM
         shell: bash
-        run: curl -fsSL https://opencode.ai/install | bash
-
-      - name: Add opencode to PATH
-        shell: bash
-        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+        run: |
+          echo "Installing opencode version: ${{ steps.version.outputs.version }}"
+          npm install -g opencode@${{ steps.version.outputs.version }}
 
       - name: Determine model from comment
         id: model_select
