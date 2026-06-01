@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write 
   issues: write        
 
@@ -54,14 +54,16 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(curl -sf https://github.com | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 | sed 's/^v//')
+          # Ripristinato l'endpoint API corretto per evitare il fallimento del curl
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 | sed 's/^v//')
           echo "version=${VERSION:-1.15.10}" >> "$GITHUB_OUTPUT"
 
       - name: Install opencode via NPM
         shell: bash
         run: |
           echo "Installing opencode version: ${{ steps.version.outputs.version }}"
-          npm install -g opencode@${{ steps.version.outputs.version }}
+          # Utilizzo del nome del pacchetto ufficiale 'opencode-ai'
+          npm install -g opencode-ai@${{ steps.version.outputs.version }}
 
       - name: Determine model from comment
         id: model_select
@@ -96,16 +98,27 @@ jobs:
           RETRY_DELAY=15
           for i in $(seq 1 $MAX_RETRIES); do
             echo "opencode run attempt $i of $MAX_RETRIES"
-            if opencode github run; then
-              echo "opencode completed successfully"
-              exit 0
-            fi
-            exit_code=$?
-            echo "opencode exit code: $exit_code"
-            if [ $i -eq $MAX_RETRIES ]; then
-              echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
+            
+            # Catturiamo l'output per intercettare i crash fittizi
+            OUTPUT=$(opencode github run 2>&1)
+            echo "$OUTPUT"
+            
+            if echo "$OUTPUT" | grep -q "undefined is not an object"; then
+              echo "Errore critico rilevato: Inizializzazione del client GitHub fallita (Token o App mancante)."
               exit 1
             fi
-            echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
+
+            if echo "$OUTPUT" | grep -q "opencode completed successfully" || [ $? -eq 0 ]; then
+              if [[ "$OUTPUT" != *"Error:"* ]]; then
+                echo "opencode completed successfully"
+                exit 0
+              fi
+            fi
+            
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "All $MAX_RETRIES attempts failed."
+              exit 1
+            fi
+            echo "Attempt $i failed, retrying in ${RETRY_DELAY}s..."
             sleep $RETRY_DELAY
           done
