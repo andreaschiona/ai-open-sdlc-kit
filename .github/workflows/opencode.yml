@@ -6,44 +6,115 @@ on:
   pull_request_review_comment:
     types: [created]
 
+concurrency:
+  group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.reply_to_id }}-${{ contains(github.event.comment.body, '/oc') && 'cmd' || 'other' }}
+  cancel-in-progress: true
+
 jobs:
   opencode:
+    if: |
+      github.event.comment != null &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.actor == 'andreaschiona' &&
+      (
+        contains(github.event.comment.body, ' /oc') ||
+        startsWith(github.event.comment.body, '/oc') ||
+        contains(github.event.comment.body, ' /opencode') ||
+        startsWith(github.event.comment.body, '/opencode')
+      )
     runs-on: ubuntu-latest
+    timeout-minutes: 180
     permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-      discussions: write
       id-token: write
-      actions: write
+      contents: write
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4 # Corretto da v6 a v4
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
+          fetch-depth: 0
 
-      - name: Configure Git
+      - name: Install jq
+        shell: bash
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Get opencode version
+        id: version
+        shell: bash
         run: |
-          git config --global user.email "opencode-agent[bot]@users.noreply.github.com"
-          git config --global user.name "opencode-agent[bot]"
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
 
-      - name: Run opencode
-        uses: anomalyco/opencode/github@latest
+      - name: Cache opencode
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+      - name: Install opencode
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add opencode to PATH
+        shell: bash
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Determine model from comment
+        id: model_select
+        shell: bash
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          if echo "$COMMENT" | grep -qi "GEMINI"; then
+            echo "model=google/gemini-2.5-flash" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "BIGPICKLE"; then
+            echo "model=opencode/big-pickle" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "NEMOTRON"; then
+            echo "model=opencode/nemotron-3-super-free" >> "$GITHUB_OUTPUT"
+          else
+            echo "model=opencode/deepseek-v4-flash-free" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run opencode (with retry)
+        shell: bash
+        id: run_opencode
         env:
+          MODEL: ${{ steps.model_select.outputs.model }}
+          OPENCODE_TELEMETRY: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          model: opencode/big-pickle
-          use_github_token: true
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "Selected model: $MODEL"
 
-      # Questo step garantisce che i file creati da Docker 
-      # siano accessibili a Git per il commit/push
-      - name: Fix permissions for Git
-        if: failure() || success()
-        run: sudo chown -R $USER:$USER ${{ github.workspace }}
+          jq --arg model "$MODEL" '.model = $model' opencode.json > opencode.tmp.json && mv opencode.tmp.json opencode.json
+          echo "Injected model '$MODEL' into opencode.json"
 
-      - name: Upload Opencode Logs on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: opencode-debug-logs
-          path: /home/runner/.local/share/opencode/log/
+          MAX_RETRIES=3
+          RETRY_DELAY=15
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "opencode run attempt $i of $MAX_RETRIES"
+            if opencode github run; then
+              echo "opencode completed successfully"
+              exit 0
+            fi
+            exit_code=$?
+            echo "opencode exit code: $exit_code"
+            if [ $i -eq $MAX_RETRIES ]; then
+              echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
+              exit 1
+            fi
+            echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
