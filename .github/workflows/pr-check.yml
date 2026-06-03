@@ -30,7 +30,7 @@ jobs:
         run: python -m py_compile osdlc.py src/osdlc/*.py
 
       - name: Test with coverage
-        run: python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v || test $? -eq 5
+        run: python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v
 
       - name: Build
         run: python -m py_compile osdlc.py src/osdlc/*.py
