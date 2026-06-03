@@ -27,13 +27,13 @@ jobs:
         run: pip install pytest pytest-cov
 
       - name: Lint
-        run: python -m py_compile osdlc.py src/osdlc/*.py
+        run: python -m py_compile run.py src/osdlc/*.py
 
       - name: Test with coverage
         run: python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v
 
       - name: Build
-        run: python -m py_compile osdlc.py src/osdlc/*.py
+        run: python -m py_compile run.py src/osdlc/*.py
 
       - name: Upload coverage artifact
         if: always()

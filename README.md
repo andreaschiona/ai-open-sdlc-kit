@@ -71,13 +71,13 @@ osdlc init
 ```
 
 > Alternatively, download the latest release or clone the repo and use
-> `python osdlc.py init` directly:
+> `python run.py init` directly:
 >
 > ```bash
 > curl -LO https://github.com/andreaschiona/ai-open-sdlc-kit/releases/latest/download/ai-open-sdlc-kit.zip
 > unzip ai-open-sdlc-kit.zip -d your-project
 > cd your-project
-> python osdlc.py init
+> python run.py init
 > ```
 
 Interactive mode will prompt you for:
@@ -125,7 +125,7 @@ Skip prompts and use auto-detected defaults:
 
 ```bash
 osdlc init --non-interactive
-# or: python osdlc.py init --non-interactive
+# or: python run.py init --non-interactive
 ```
 
 ### Force overwrite
@@ -134,14 +134,14 @@ Regenerate all files, overwriting existing ones:
 
 ```bash
 osdlc init --force
-# or: python osdlc.py init --force
+# or: python run.py init --force
 ```
 
 ### Target a different directory
 
 ```bash
 osdlc init --target /path/to/project
-# or: python osdlc.py init --target /path/to/project
+# or: python run.py init --target /path/to/project
 ```
 
 ---
@@ -419,7 +419,7 @@ Supported version file formats: `VERSION`, `pyproject.toml`, `package.json`,
    - `fix: ...` for bug fixes
    - `chore: ...` for maintenance
 4. Run tests: `python -m pytest -v`
-5. Run lint: `python -m py_compile osdlc.py src/osdlc/*.py`
+5. Run lint: `python -m py_compile run.py src/osdlc/*.py`
 6. Push your branch and open a Pull Request targeting `main`.
 7. Ensure all PR checks pass before merge.
 
@@ -429,7 +429,7 @@ Supported version file formats: `VERSION`, `pyproject.toml`, `package.json`,
 git clone https://github.com/andreaschiona/ai-open-sdlc-kit.git
 cd ai-open-sdlc-kit
 pip install -e ".[test]"
-python osdlc.py init --non-interactive --target /tmp/test-project
+python run.py init --non-interactive --target /tmp/test-project
 ```
 
 ### Reporting issues

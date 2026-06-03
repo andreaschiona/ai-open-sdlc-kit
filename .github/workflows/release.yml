@@ -59,7 +59,7 @@ jobs:
         run: pip install pytest
 
       - name: Lint
-        run: python -m py_compile osdlc.py src/osdlc/*.py
+        run: python -m py_compile run.py src/osdlc/*.py
 
       - name: Run tests
         id: tests
@@ -67,7 +67,7 @@ jobs:
         run: python -m pytest -v || test $? -eq 5
 
       - name: Build
-        run: python -m py_compile osdlc.py src/osdlc/*.py
+        run: python -m py_compile run.py src/osdlc/*.py
 
       - name: Create issue on test failure
         if: steps.tests.outcome == 'failure'

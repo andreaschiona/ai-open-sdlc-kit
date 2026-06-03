@@ -6,9 +6,9 @@ This project uses Python with a manual build system (manual).
 
 ## Verified Commands
 
-- **Build:** `python -m py_compile osdlc.py src/osdlc/*.py`
+- **Build:** `python -m py_compile run.py src/osdlc/*.py`
 - **Test:** `python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v`
-- **Lint:** `python -m py_compile osdlc.py src/osdlc/*.py`
+- **Lint:** `python -m py_compile run.py src/osdlc/*.py`
 
 ## Environment
 
