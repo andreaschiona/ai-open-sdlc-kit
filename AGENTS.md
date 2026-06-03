@@ -6,11 +6,9 @@ This project uses Python with a manual build system (manual).
 
 ## Verified Commands
 
-| Action | Command |
-|--------|---------|
-| Build  | `python -m py_compile osdlc.py src/osdlc/*.py` |
-| Test   | `python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v` |
-| Lint   | `python -m py_compile osdlc.py src/osdlc/*.py` |
+- **Build:** `python -m py_compile osdlc.py src/osdlc/*.py`
+- **Test:** `python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v`
+- **Lint:** `python -m py_compile osdlc.py src/osdlc/*.py`
 
 ## Environment
 
@@ -32,17 +30,17 @@ When opencode is triggered by a comment:
 
 | Command | Scope | Behaviour |
 |---------|-------|-----------|
-| `/oc fix` | Issue | Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `main`, apply the fix, commit with `fix:` prefix, and push. Do NOT create a PR. The instruction payload may describe the fix intent. |
-| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. The instruction payload may scope the analysis. |
-| `/oc plan` | Issue | (Requires prior analyze comment) Read the analysed functional requirement from the issue. Produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create or modify, the approach, and any dependencies. |
-| `/oc implement` | Issue | (Requires prior plan comment) Create a feature branch named `issue-{{number}}` from `main`. Implement the plan file-by-file, committing each logical unit with a conventional commit message. Open a Pull Request targeting `main` that includes `Closes #{{number}}` in the description. |
-| `/oc fixCheck` | PR | Read the PR's automated check results (lint errors, test failures). For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. When done (all passing or retries exhausted), post a status comment on the PR. |
+| `/oc fix` | Issue | Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `main`, apply the fix, commit with `fix:`, and push. Do NOT create a PR. The payload may describe the fix intent. |
+| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. |
+| `/oc plan` | Issue | Requires prior analyze. Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. |
+| `/oc implement` | Issue | Requires prior plan. Create branch `issue-{{number}}` from `main`. Implement file-by-file, commit each unit conventionally. Open a PR targeting `main` with `Closes #{{number}}`. |
+| `/oc fixCheck` | PR | Read automated check results. For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. Post a status comment when done. |
 
 ### Instruction Payload
 
 Any text after the command token is the instruction payload. The agent MAY use it for additional context:
-- `/oc fix add null guard` → command `fix`, payload `add null guard`
-- `/oc analyze` → command `analyze`, payload empty
+- `/oc fix add null guard` -> command `fix`, payload `add null guard`
+- `/oc analyze` -> command `analyze`, payload empty
 
 ### Model Overrides
 
