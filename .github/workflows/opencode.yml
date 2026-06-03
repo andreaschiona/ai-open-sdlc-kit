@@ -117,7 +117,7 @@ jobs:
 
           MAX_RETRIES=3
           RETRY_DELAY=15
-          for i in $(seq 1 $MAX_RETRIES); do
+          for i in $(seq 1 "$MAX_RETRIES"); do
             echo "opencode run attempt $i of $MAX_RETRIES"
             if opencode github run; then
               echo "opencode completed successfully"
@@ -125,12 +125,12 @@ jobs:
             fi
             exit_code=$?
             echo "opencode exit code: $exit_code"
-            if [ $i -eq $MAX_RETRIES ]; then
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
               echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
               exit 1
             fi
             echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
+            sleep "$RETRY_DELAY"
           done
 
   auto-analyze-failure:
@@ -157,9 +157,11 @@ jobs:
         id: pr
         shell: bash
         run: |
-          echo "number=${{ github.event.workflow_run.pull_requests[0].number }}" >> "$GITHUB_OUTPUT"
-          echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
-          echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          {
+            echo "number=${{ github.event.workflow_run.pull_requests[0].number }}"
+            echo "head_branch=${{ github.event.workflow_run.head_branch }}"
+            echo "head_sha=${{ github.event.workflow_run.head_sha }}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Collect failure context
         shell: bash
