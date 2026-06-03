@@ -170,8 +170,12 @@ def scaffold(config, root=".", force=False):
     skipped = []
     errors = []
 
+    templates = dict(ALL_TEMPLATES)
+    if not config.get("error_to_issue"):
+        templates.pop(".opencode/skills/error-handling/SKILL.md", None)
+
     dirs_to_create = set()
-    for filepath in ALL_TEMPLATES:
+    for filepath in templates:
         full_path = os.path.join(root, filepath)
         parent = os.path.dirname(full_path)
         if parent:
@@ -180,7 +184,7 @@ def scaffold(config, root=".", force=False):
     for d in sorted(dirs_to_create):
         os.makedirs(d, exist_ok=True)
 
-    for filepath, template in ALL_TEMPLATES.items():
+    for filepath, template in templates.items():
         full_path = os.path.join(root, filepath)
 
         if os.path.exists(full_path) and not force:
