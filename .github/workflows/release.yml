@@ -49,7 +49,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          OUTPUT=$(python -m osdlc.version update --root . 2>&1)
+          OUTPUT=$(PYTHONPATH=src python -m osdlc.version update --root . 2>&1)
           echo "update_output=$OUTPUT" >> "$GITHUB_OUTPUT"
           NEW_VERSION=$(echo "$OUTPUT" | grep -oP '-> \K[0-9]+\.[0-9]+\.[0-9]+')
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
@@ -113,7 +113,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          VERSION_FILE=$(python -m osdlc.version detect --root . | cut -d' ' -f1)
+          VERSION_FILE=$(PYTHONPATH=src python -m osdlc.version detect --root . | cut -d' ' -f1)
           [ -z "$VERSION_FILE" ] && VERSION_FILE="VERSION"
           git add "$VERSION_FILE"
           git commit -m "chore: bump version to ${{ steps.resolve.outputs.new_version }} [skip ci]"
