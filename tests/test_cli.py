@@ -48,36 +48,36 @@ class TestMainEntryPoint:
 
     def test_main_init_non_interactive(self, git_init):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "init", "--non-interactive", "--target", git_init]
+        sys.argv = ["run.py", "init", "--non-interactive", "--target", git_init]
         result = main()
         assert result == 0
 
     def test_main_unknown_command(self, git_init):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "unknown"]
+        sys.argv = ["run.py", "unknown"]
         with pytest.raises(SystemExit):
             main()
 
     def test_main_defaults_to_init(self, git_init):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "--non-interactive", "--target", git_init]
+        sys.argv = ["run.py", "--non-interactive", "--target", git_init]
         result = main()
         assert result == 0
 
     def test_main_nonexistent_target(self):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "init", "--non-interactive", "--target", r"C:\nonexistent_xyzzy"]
+        sys.argv = ["run.py", "init", "--non-interactive", "--target", r"C:\nonexistent_xyzzy"]
         result = main()
         assert result == 1
 
     def test_main_force_flag(self, git_init):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "init", "--non-interactive", "--force", "--target", git_init]
+        sys.argv = ["run.py", "init", "--non-interactive", "--force", "--target", git_init]
         result = main()
         assert result == 0
 
     def test_main_force_short_flag(self, git_init):
         from osdlc.cli import main
-        sys.argv = ["osdlc.py", "init", "--non-interactive", "-f", "--target", git_init]
+        sys.argv = ["run.py", "init", "--non-interactive", "-f", "--target", git_init]
         result = main()
         assert result == 0
