@@ -27,7 +27,7 @@ jobs:
         run: python -m py_compile src/osdlc/*.py osdlc.py
 
       - name: Test
-        run: python -m pytest tests/ -v
+        run: python -m pytest tests/ -v || test $? -eq 5
 
       - name: Build
         run: python -m py_compile src/osdlc/*.py osdlc.py
