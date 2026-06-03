@@ -55,6 +55,40 @@ class TestDetectProjectType:
         assert result is not None
         assert result["build_system"] == "Gradle Kotlin"
 
+    def test_detects_yarn(self, temp_dir):
+        open(os.path.join(temp_dir, "yarn.lock"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "Yarn"
+
+    def test_detects_pnpm(self, temp_dir):
+        open(os.path.join(temp_dir, "pnpm-lock.yaml"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "pnpm"
+
+    def test_detects_setup_py(self, temp_dir):
+        open(os.path.join(temp_dir, "setup.py"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "setuptools"
+        assert result["language"] == "Python"
+
+    def test_detects_requirements_txt(self, temp_dir):
+        open(os.path.join(temp_dir, "requirements.txt"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "pip"
+        assert result["language"] == "Python"
+
+    def test_yarn_takes_priority_over_npm(self, temp_dir):
+        open(os.path.join(temp_dir, "yarn.lock"), "w").close()
+        open(os.path.join(temp_dir, "package.json"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "Yarn"
+
+    def test_pyproject_toml_takes_priority_over_setup_py(self, temp_dir):
+        open(os.path.join(temp_dir, "pyproject.toml"), "w").close()
+        open(os.path.join(temp_dir, "setup.py"), "w").close()
+        result = detect_project_type(temp_dir)
+        assert result["build_system"] == "PEP 621"
+
     def test_priority_order(self, temp_dir):
         open(os.path.join(temp_dir, "pom.xml"), "w").close()
         open(os.path.join(temp_dir, "package.json"), "w").close()
