@@ -54,7 +54,7 @@ jobs:
       - name: Run tests
         id: tests
         continue-on-error: true
-        run: python -m pytest tests/ -v || echo "No tests found"
+        run: python -m pytest tests/ -v
 
       - name: Create issue on test failure
         if: steps.tests.outcome == 'failure'

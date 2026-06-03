@@ -1,33 +1,33 @@
 OPECODE_JSON = """\
-{{
+{
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
     "AGENTS.md"
   ],
-  "skills": {{
+  "skills": {
     "paths": [".opencode/skills"]
-  }},
-  "permission": {{
+  },
+  "permission": {
     "bash": "allow"
-  }},
-  "compaction": {{
+  },
+  "compaction": {
     "auto": true,
     "tail_turns": 10
-  }},
-  "tool_output": {{
+  },
+  "tool_output": {
     "max_lines": 150,
     "max_bytes": 6144
-  }},
-  "provider": {{
-    "opencode": {{
-      "options": {{
+  },
+  "provider": {
+    "opencode": {
+      "options": {
         "timeout": 300000,
         "chunkTimeout": 60000
-      }}
-    }}{provider_google}
-  }},
+      }
+    }{provider_google}
+  },
   "model": "{model}"
-}}
+}
 """
 
 AGENTS_MD = """\
@@ -89,11 +89,11 @@ Version is stored in: `{version_file}`
 """
 
 PACKAGE_JSON = """\
-{{
+{
   "name": "opencode-skills",
   "private": true,
   "version": "0.0.0"
-}}
+}
 """
 
 DOT_GITIGNORE = """\
@@ -186,12 +186,12 @@ on:
     types: [created]
 
 concurrency:
-  group: ${{{{{{ github.event_name }}}}-{{{{{{ github.event.issue.number }}}}}}
+  group: ${{ github.event_name }}-${{ github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
   opencode:
-    if: ${{{{{{ github.event.comment != null && github.event.comment.body != '' && github.repository_owner == github.event.comment.user.login }}}}}}
+    if: ${{ github.event.comment != null && github.event.comment.body != '' && github.repository_owner == github.event.comment.user.login }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -227,11 +227,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.opencode/bin
-          key: opencode-${{{{{{ steps.version.outputs.version }}}}}}
+          key: opencode-${{ steps.version.outputs.version }}
 
       - name: Install opencode
         if: steps.cache.outputs.cache-hit != 'true'
-        run: curl -fsSL https://opencode.ai/install.sh | sh -s -- {version}
+        run: curl -fsSL https://opencode.ai/install.sh | sh -s -- ${{ steps.version.outputs.version }}
 
       - name: Add opencode to PATH
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
@@ -239,7 +239,7 @@ jobs:
       - name: Determine model from comment
         id: model
         run: |
-          BODY="${{{{{{ github.event.comment.body }}}}}}"
+          BODY="${{ github.event.comment.body }}"
           if echo "$BODY" | grep -qi "GEMINI"; then
             echo "model=google/gemini-2.5-flash" >> $GITHUB_OUTPUT
           elif echo "$BODY" | grep -qi "BIGPICKLE"; then
@@ -253,12 +253,12 @@ jobs:
       - name: Run opencode
         env:
           OPENCODE_TELEMETRY: "false"
-          GITHUB_TOKEN: ${{{{{{ secrets.GITHUB_TOKEN }}}}}}
-          GEMINI_API_KEY: ${{{{{{ secrets.GEMINI_API_KEY }}}}}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           for i in 1 2 3; do
             echo "Attempt $i/3"
-            jq '.model = "${{{{{{ steps.model.outputs.model }}}}}}"' opencode.json > tmp.json && mv tmp.json opencode.json
+            jq '.model = "${{ steps.model.outputs.model }}"' opencode.json > tmp.json && mv tmp.json opencode.json
             opencode github run && break || sleep 15
           done
 """
@@ -328,24 +328,25 @@ jobs:
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           COMMITS=$(git log $LAST_TAG..HEAD --format="%s")
           if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
-            echo "type=major" >> $GITHUB_OUTPUT
+            echo "type=major" >> "$GITHUB_OUTPUT"
           elif echo "$COMMITS" | grep -q "^feat"; then
-            echo "type=minor" >> $GITHUB_OUTPUT
+            echo "type=minor" >> "$GITHUB_OUTPUT"
           else
-            echo "type=patch" >> $GITHUB_OUTPUT
+            echo "type=patch" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Update version
+        id: version
         run: |
           CURRENT=$(grep -oP '(?<=version=)[0-9]+[.][0-9]+[.][0-9]+' {version_file} || echo "0.0.0")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          case "${{{{{{ steps.bump.outputs.type }}}}}}" in
+          case "${{ steps.bump.outputs.type }}" in
             major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
             minor) MINOR=$((MINOR+1)); PATCH=0 ;;
             patch) PATCH=$((PATCH+1)) ;;
           esac
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
           sed -i "s/version=$CURRENT/version=$NEW_VERSION/" {version_file}
 
       - name: Run tests
@@ -358,13 +359,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.create({{
+            github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: 'Release tests failed',
-              body: 'Tests failed during release for version ${{{{{{ steps.update.outputs.new_version }}}}}}. Check the release workflow run for details.',
+              body: 'Tests failed during release for version ${{ steps.version.outputs.new_version }}. Check the release workflow run for details.',
               labels: ['bug', 'auto-reported']
-            }})
+            })
 
       - name: Fail if tests failed
         if: steps.tests.outcome == 'failure'
@@ -378,13 +379,13 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add {version_file}
-          git commit -m "chore: bump version to ${{{{{{ steps.update.outputs.new_version }}}}}} [skip ci]"
-          git tag v${{{{{{ steps.update.outputs.new_version }}}}}}
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag v${{ steps.version.outputs.new_version }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{{{{{ steps.update.outputs.new_version }}}}}}
+          tag_name: v${{ steps.version.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
 """
@@ -419,13 +420,13 @@ jobs:
 
       - uses: github/codeql-action/init@v3
         with:
-          languages: ${{{{{{ matrix.language }}}}}}
+          languages: ${{ matrix.language }}
 
       - uses: github/codeql-action/autobuild@v3
 
       - uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{{{{{ matrix.language }}}}}}"
+          category: "/language:${{ matrix.language }}"
 """
 
 LINT_WORKFLOW = """\
@@ -452,7 +453,7 @@ jobs:
         env:
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: {default_branch}
-          GITHUB_TOKEN: ${{{{{{ secrets.GITHUB_TOKEN }}}}}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_JAVA: {validate_java}
           VALIDATE_KOTLIN: {validate_kotlin}
           VALIDATE_JAVASCRIPT_ES: {validate_javascript}

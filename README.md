@@ -12,7 +12,7 @@ python osdlc.py init
 ### Options
 
 | Flag | Description |
-|------|-------------|
+| --- | ----------- |
 | `--force`, `-f` | Overwrite existing files |
 | `--target`, `-t` | Target directory (default: current directory) |
 | `--non-interactive` | Skip interactive prompts (use detected defaults) |
@@ -20,7 +20,7 @@ python osdlc.py init
 ### What it generates
 
 | File | Description |
-|------|-------------|
+| --- | ----------- |
 | `opencode.json` | OpenCode configuration |
 | `AGENTS.md` | Agent instructions with project-specific commands |
 | `.opencode/package.json` | Skills package manifest |

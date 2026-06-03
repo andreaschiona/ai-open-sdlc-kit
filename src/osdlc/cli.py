@@ -56,12 +56,13 @@ def print_summary(generated, skipped, errors):
     print()
 
 
-def check_git_repo():
+def check_git_repo(root="."):
     try:
         import subprocess
         result = subprocess.run(
             ["git", "rev-parse", "--is-inside-work-tree"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=5,
+            cwd=root
         )
         return result.returncode == 0
     except Exception:
@@ -102,7 +103,7 @@ def main():
         print(f"Error: target directory '{root}' does not exist.")
         return 1
 
-    if not check_git_repo():
+    if not check_git_repo(root):
         print("Warning: Not inside a Git repository. Some features may not work.")
         print("Consider running 'git init' first.")
 
@@ -166,7 +167,7 @@ def main():
 
         if error_to_issue:
             config["github_token_env"] = prompt("GITHUB_TOKEN environment variable name", default="GITHUB_TOKEN")
-            config["provider_google"] = '\n  },\n  "google": {\n    "options": {\n      "timeout": 300000,\n      "chunkTimeout": 60000\n    }\n  }'
+            config["provider_google"] = ',\n    "google": {\n      "options": {\n        "timeout": 300000,\n        "chunkTimeout": 60000\n      }\n    }'
         else:
             config["provider_google"] = ""
 

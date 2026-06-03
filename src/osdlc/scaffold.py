@@ -13,11 +13,11 @@ def detect_codeql_languages(language):
         "Rust": "rust",
         "Go": "go",
         "Ruby": "ruby",
-        "PHP": "ruby",
+        "PHP": "python",
         "C/C++": "cpp",
         "C#": "csharp",
         "Swift": "swift",
-        "Elixir": "ruby",
+        "Elixir": "python",
     }
     return mapping.get(language, "python")
 
@@ -139,7 +139,7 @@ def build_template_vars(config):
         "architectural_notes": config.get("architectural_notes", ""),
         "model": config.get("model", "opencode/deepseek-v4-flash-free"),
         "provider_google": config.get("provider_google", ""),
-        "codeql_languages": f"[{codeql_lang!r}]",
+        "codeql_languages": repr(codeql_lang),
         "ecosystem": ecosystem,
         "language_setup": lang_setup,
         "validate_java": validate_java,
@@ -181,9 +181,6 @@ def scaffold(config, root=".", force=False):
         os.makedirs(d, exist_ok=True)
 
     for filepath, template in ALL_TEMPLATES.items():
-        if filepath == ".opencode/skills/error-handling/SKILL.md" and not config.get("error_to_issue"):
-            continue
-
         full_path = os.path.join(root, filepath)
 
         if os.path.exists(full_path) and not force:
