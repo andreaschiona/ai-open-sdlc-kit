@@ -24,13 +24,39 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: pip install pytest
+        run: pip install pytest pytest-cov
 
       - name: Lint
-        run: python -m py_compile src/osdlc/*.py osdlc.py
+        run: python -m py_compile osdlc.py src/osdlc/*.py
 
-      - name: Test
-        run: python -m pytest -v || test $? -eq 5
+      - name: Test with coverage
+        run: python -m pytest --cov=src/osdlc --cov-report=xml --cov-report=term-missing -v || test $? -eq 5
 
       - name: Build
-        run: python -m py_compile src/osdlc/*.py osdlc.py
+        run: python -m py_compile osdlc.py src/osdlc/*.py
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+      - name: PR comment with results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: checks } = await github.rest.checks.listForRef({
+              ...context.repo,
+              ref: context.sha,
+            });
+            const summary = checks.check_runs.map(c =>
+              `- **${c.name}**: ${c.conclusion || 'in_progress'}`
+            ).join('\n');
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `## PR Check Results\n\n${summary}\n\n_Updated at ${new Date().toISOString()}_`,
+            });
