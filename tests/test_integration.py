@@ -225,7 +225,7 @@ class TestPrerequisites:
         with open(os.path.join(git_init, ".github", "workflows", "opencode.yml")) as f:
             content = f.read()
         assert "actions/checkout@v4" in content
-        assert "actions/cache@v4" in content
+        assert "https://opencode.ai/install" in content
 
     def test_github_token_secret_documented(self, git_init):
         subprocess.run(
@@ -237,14 +237,15 @@ class TestPrerequisites:
         assert "GITHUB_TOKEN" in content
         assert "secrets.GITHUB_TOKEN" in content
 
-    def test_gemini_api_key_referenced(self, git_init):
+    def test_model_and_token_env_vars(self, git_init):
         subprocess.run(
             [sys.executable, OSDLC_SCRIPT, "init", "--non-interactive", "--target", git_init],
             capture_output=True, timeout=15
         )
         with open(os.path.join(git_init, ".github", "workflows", "opencode.yml")) as f:
             content = f.read()
-        assert "GEMINI_API_KEY" in content
+        assert "MODEL:" in content
+        assert "USE_GITHUB_TOKEN" in content
 
     def test_workflow_permissions_are_set(self, git_init):
         subprocess.run(
