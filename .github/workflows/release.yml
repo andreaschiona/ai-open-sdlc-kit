@@ -98,7 +98,19 @@ jobs:
         if: steps.tests.outcome == 'failure'
         run: exit 1
 
+      - name: Check if release tag exists
+        id: check_tag
+        run: |
+          TAG="v${{ steps.version.outputs.new_version }}"
+          if git tag -l "$TAG" | grep -q .; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists — skipping release"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Commit version bump
+        if: steps.check_tag.outputs.exists == 'false'
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
@@ -109,11 +121,13 @@ jobs:
           git tag v${{ steps.version.outputs.new_version }}
 
       - name: Push changes
+        if: steps.check_tag.outputs.exists == 'false'
         run: |
           git push origin main
           git push origin v${{ steps.version.outputs.new_version }}
 
       - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
