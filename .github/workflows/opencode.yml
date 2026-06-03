@@ -1,3 +1,4 @@
+---
 name: opencode
 
 on:
@@ -5,14 +6,25 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  workflow_run:
+    workflows: ["PR Check"]
+    types: [completed]
 
 concurrency:
-  group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.reply_to_id }}-${{ contains(github.event.comment.body, '/oc') && 'cmd' || 'other' }}
+  group: opencode-${{ github.event_name }}-${{
+    github.event.issue.number ||
+    github.event.pull_request.number ||
+    github.event.workflow_run.pull_requests[0].number ||
+    github.event.reply_to_id }}-${{
+    github.event_name == 'workflow_run' && 'auto' ||
+    contains(github.event.comment.body, '/oc') && 'cmd' ||
+    'other' }}
   cancel-in-progress: true
 
 jobs:
   opencode:
     if: |
+      github.event_name != 'workflow_run' &&
       github.event.comment != null &&
       github.event.comment.author_association == 'OWNER' &&
       github.actor == 'andreaschiona' &&
@@ -53,7 +65,8 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
           echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
 
       - name: Cache opencode
@@ -104,7 +117,7 @@ jobs:
 
           MAX_RETRIES=3
           RETRY_DELAY=15
-          for i in $(seq 1 $MAX_RETRIES); do
+          for i in $(seq 1 "$MAX_RETRIES"); do
             echo "opencode run attempt $i of $MAX_RETRIES"
             if opencode github run; then
               echo "opencode completed successfully"
@@ -112,10 +125,115 @@ jobs:
             fi
             exit_code=$?
             echo "opencode exit code: $exit_code"
-            if [ $i -eq $MAX_RETRIES ]; then
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
               echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
               exit 1
             fi
             echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
+            sleep "$RETRY_DELAY"
           done
+
+  auto-analyze-failure:
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.pull_requests[0] != null &&
+      github.event.workflow_run.head_repository.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: read
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get PR number
+        id: pr
+        shell: bash
+        run: |
+          {
+            echo "number=${{ github.event.workflow_run.pull_requests[0].number }}"
+            echo "head_branch=${{ github.event.workflow_run.head_branch }}"
+            echo "head_sha=${{ github.event.workflow_run.head_sha }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Collect failure context
+        shell: bash
+        run: |
+          mkdir -p /tmp/ci-context
+          URL="/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
+          gh api "$URL" --jq '
+            .check_runs[] | select(.conclusion == "failure") |
+            "## \(.name)\n\n**Title:** \(.output.title // "failed")\n\n**Summary:**\n\(.output.summary // "N/A")\n\n**Text:**\n\(.output.text // "N/A")\n"
+          ' > /tmp/ci-context/check-failures.md
+          gh pr diff ${{ steps.pr.outputs.number }} > /tmp/ci-context/pr-diff.diff
+          echo "Failure context collected ($(wc -l < /tmp/ci-context/check-failures.md) lines)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get opencode version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
+          echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache opencode
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.opencode/bin
+          key: opencode-auto-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+      - name: Install opencode
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add opencode to PATH
+        shell: bash
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Analyze failures with opencode
+        shell: bash
+        continue-on-error: true
+        env:
+          OPENCODE_TELEMETRY: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          opencode run --model opencode/deepseek-v4-flash-free \
+            --file /tmp/ci-context/check-failures.md \
+            --file /tmp/ci-context/pr-diff.diff \
+            "I CI check su questa PR (#${{ steps.pr.outputs.number }}) sono falliti. \
+            I file allegati contengono i dettagli dei check falliti e il diff della PR. \
+            Analizza i fallimenti e proponi correzioni specifiche. \
+            Fornisci un'analisi dettagliata in italiano." \
+            > /tmp/ci-context/analysis.md 2>&1
+
+      - name: Post analysis to PR
+        if: always() && steps.pr.outputs.number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo '## Analisi automatica CI'
+            echo ''
+            if [ -s /tmp/ci-context/analysis.md ]; then
+              echo 'OpenCode ha analizzato i fallimenti dei check su questo PR.'
+              echo ''
+              cat /tmp/ci-context/analysis.md
+            else
+              echo "L'analisi automatica non ha prodotto risultati."
+              echo "Per analizzare manualmente, commenta con /oc analizza i fallimenti CI su questa PR."
+            fi
+          } > /tmp/ci-context/body.md
+          gh pr comment ${{ steps.pr.outputs.number }} --body-file /tmp/ci-context/body.md

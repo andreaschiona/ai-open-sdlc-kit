@@ -1,5 +1,9 @@
 # AI Open SDLC Kit
 
+<p align="center">
+  <img src="OSDLC%20Icon.png" alt="OSDLC Icon" width="120">
+</p>
+
 CLI scaffolding tool that bootstraps any Git repository with an
 opencode-native SDLC methodology.
 
