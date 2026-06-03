@@ -1,3 +1,4 @@
+---
 name: opencode
 
 on:
@@ -8,10 +9,16 @@ on:
   workflow_run:
     workflows: ["PR Check"]
     types: [completed]
-    branches: [main]
 
 concurrency:
-  group: opencode-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || github.event.reply_to_id }}-${{ contains(github.event.comment.body, '/oc') && 'cmd' || 'auto' }}
+  group: opencode-${{ github.event_name }}-${{
+    github.event.issue.number ||
+    github.event.pull_request.number ||
+    github.event.workflow_run.pull_requests[0].number ||
+    github.event.reply_to_id }}-${{
+    github.event_name == 'workflow_run' && 'auto' ||
+    contains(github.event.comment.body, '/oc') && 'cmd' ||
+    'other' }}
   cancel-in-progress: true
 
 jobs:
@@ -58,7 +65,8 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
           echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
 
       - name: Cache opencode
@@ -129,7 +137,8 @@ jobs:
     if: |
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.pull_requests[0] != null
+      github.event.workflow_run.pull_requests[0] != null &&
+      github.event.workflow_run.head_repository.fork == false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -144,23 +153,21 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Get PR number and details
+      - name: Get PR number
         id: pr
         shell: bash
         run: |
-          PR_NUMBER=$(gh run view ${{ github.event.workflow_run.id }} --json pullRequests --jq '.pullRequests[0].number')
-          echo "number=${PR_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "number=${{ github.event.workflow_run.pull_requests[0].number }}" >> "$GITHUB_OUTPUT"
           echo "head_branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Collect failure context
         shell: bash
         run: |
           mkdir -p /tmp/ci-context
-          gh api "/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs" --jq '
-            .check_runs[] | select(.conclusion == "failure") | 
+          URL="/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
+          gh api "$URL" --jq '
+            .check_runs[] | select(.conclusion == "failure") |
             "## \(.name)\n\n**Title:** \(.output.title // "failed")\n\n**Summary:**\n\(.output.summary // "N/A")\n\n**Text:**\n\(.output.text // "N/A")\n"
           ' > /tmp/ci-context/check-failures.md
           gh pr diff ${{ steps.pr.outputs.number }} > /tmp/ci-context/pr-diff.diff
@@ -172,7 +179,8 @@ jobs:
         id: version
         shell: bash
         run: |
-          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
           echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
 
       - name: Cache opencode
@@ -203,9 +211,9 @@ jobs:
             --file /tmp/ci-context/check-failures.md \
             --file /tmp/ci-context/pr-diff.diff \
             "I CI check su questa PR (#${{ steps.pr.outputs.number }}) sono falliti. \
-I file allegati contengono i dettagli dei check falliti e il diff della PR. \
-Analizza i fallimenti e proponi correzioni specifiche. \
-Fornisci un'analisi dettagliata in italiano." \
+            I file allegati contengono i dettagli dei check falliti e il diff della PR. \
+            Analizza i fallimenti e proponi correzioni specifiche. \
+            Fornisci un'analisi dettagliata in italiano." \
             > /tmp/ci-context/analysis.md 2>&1
 
       - name: Post analysis to PR
@@ -214,16 +222,16 @@ Fornisci un'analisi dettagliata in italiano." \
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -s /tmp/ci-context/analysis.md ]; then
-            gh pr comment ${{ steps.pr.outputs.number }} --body \
-              "## Analisi automatica CI
-
-OpenCode ha analizzato i fallimenti dei check su questo PR.
-
-$(cat /tmp/ci-context/analysis.md)"
-          else
-            gh pr comment ${{ steps.pr.outputs.number }} --body \
-              "## Analisi automatica CI
-
-L'analisi automatica non ha prodotto risultati. Per analizzare manualmente, commenta con \`/oc analizza i fallimenti CI su questa PR\`."
-          fi
+          {
+            echo '## Analisi automatica CI'
+            echo ''
+            if [ -s /tmp/ci-context/analysis.md ]; then
+              echo 'OpenCode ha analizzato i fallimenti dei check su questo PR.'
+              echo ''
+              cat /tmp/ci-context/analysis.md
+            else
+              echo "L'analisi automatica non ha prodotto risultati."
+              echo "Per analizzare manualmente, commenta con /oc analizza i fallimenti CI su questa PR."
+            fi
+          } > /tmp/ci-context/body.md
+          gh pr comment ${{ steps.pr.outputs.number }} --body-file /tmp/ci-context/body.md
