@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python 3.8+"></a>
+  <a href="https://pypi.org/project/osdlc-kit/"><img src="https://img.shields.io/pypi/v/osdlc-kit.svg" alt="PyPI"></a>
   <a href="https://github.com/andreaschiona/ai-open-sdlc-kit/actions/workflows/pr-check.yml"><img src="https://github.com/andreaschiona/ai-open-sdlc-kit/actions/workflows/pr-check.yml/badge.svg" alt="PR Check"></a>
   <a href="https://github.com/andreaschiona/ai-open-sdlc-kit/actions/workflows/codeql.yml"><img src="https://github.com/andreaschiona/ai-open-sdlc-kit/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
   <a href="https://opencode.ai"><img src="https://img.shields.io/badge/agent-opencode-7B3FE4.svg" alt="OpenCode"></a>
@@ -57,27 +58,27 @@ Quick fixes skip the analyze/plan steps:
 - [GitHub CLI](https://cli.github.com/) (`gh`)
 - An opencode account at [opencode.ai](https://opencode.ai)
 
-### 1. Download the latest release
+### 1. Install via pip
 
 ```bash
-# Download and extract the latest release
-curl -LO https://github.com/andreaschiona/ai-open-sdlc-kit/releases/latest/download/ai-open-sdlc-kit.zip
-unzip ai-open-sdlc-kit.zip -d your-project
-cd your-project
-```
-
-Alternatively, clone the repository and copy the files:
-
-```bash
-git clone https://github.com/andreaschiona/ai-open-sdlc-kit.git
-cd ai-open-sdlc-kit
+pip install osdlc-kit
 ```
 
 ### 2. Run the kit init
 
 ```bash
-python osdlc.py init
+osdlc init
 ```
+
+> Alternatively, download the latest release or clone the repo and use
+> `python osdlc.py init` directly:
+>
+> ```bash
+> curl -LO https://github.com/andreaschiona/ai-open-sdlc-kit/releases/latest/download/ai-open-sdlc-kit.zip
+> unzip ai-open-sdlc-kit.zip -d your-project
+> cd your-project
+> python osdlc.py init
+> ```
 
 Interactive mode will prompt you for:
 
@@ -123,7 +124,8 @@ with `/oc plan` and `/oc implement` to close the cycle.
 Skip prompts and use auto-detected defaults:
 
 ```bash
-python osdlc.py init --non-interactive
+osdlc init --non-interactive
+# or: python osdlc.py init --non-interactive
 ```
 
 ### Force overwrite
@@ -131,13 +133,15 @@ python osdlc.py init --non-interactive
 Regenerate all files, overwriting existing ones:
 
 ```bash
-python osdlc.py init --force
+osdlc init --force
+# or: python osdlc.py init --force
 ```
 
 ### Target a different directory
 
 ```bash
-python osdlc.py init --target /path/to/project
+osdlc init --target /path/to/project
+# or: python osdlc.py init --target /path/to/project
 ```
 
 ---
@@ -424,7 +428,7 @@ Supported version file formats: `VERSION`, `pyproject.toml`, `package.json`,
 ```bash
 git clone https://github.com/andreaschiona/ai-open-sdlc-kit.git
 cd ai-open-sdlc-kit
-pip install pytest pytest-cov
+pip install -e ".[test]"
 python osdlc.py init --non-interactive --target /tmp/test-project
 ```
 
