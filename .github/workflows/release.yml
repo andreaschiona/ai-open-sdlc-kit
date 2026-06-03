@@ -11,10 +11,13 @@ on:
 permissions:
   contents: write
   issues: write
+  id-token: write  # needed for PyPI trusted publishing
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.resolve.outputs.new_version }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -127,3 +130,27 @@ jobs:
           tag_name: v${{ steps.resolve.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: v${{ needs.release.outputs.new_version }}
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build wheel
+        run: |
+          pip install hatchling
+          python -m hatchling build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

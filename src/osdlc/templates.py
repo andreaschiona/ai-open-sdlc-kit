@@ -211,16 +211,8 @@ concurrency:
 jobs:
   opencode:
     if: >
-      github.event_name != 'workflow_run' &&
-      github.event.comment != null &&
-      github.event.comment.body != '' &&
-      github.repository_owner == github.event.comment.user.login &&
-      (
-        startsWith(github.event.comment.body, '/oc ') ||
-        startsWith(github.event.comment.body, '/opencode ') ||
-        github.event.comment.body == '/oc' ||
-        github.event.comment.body == '/opencode'
-      )
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -230,95 +222,28 @@ jobs:
       pull-requests: write
       issues: write
 
-    strategy:
-      matrix:
-        python-version: ["3.x"]
-
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          persist-credentials: true
           fetch-depth: 0
 
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-{language_setup}
-
-      - name: Get opencode version
-        id: version
+      - name: Configure git identity
         run: |
-          VERSION=$(curl -s https://api.github.com/repos/anomalyco/opencode/releases/latest | jq -r '.tag_name')
-          echo "version=${VERSION:-v1.15.10}" >> $GITHUB_OUTPUT
-
-      - name: Cache opencode
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.opencode/bin
-          key: opencode-${{ steps.version.outputs.version }}
+          git config user.email "opencode@github.actions"
+          git config user.name "opencode"
 
       - name: Install opencode
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: curl -fsSL https://opencode.ai/install.sh | sh -s -- ${{ steps.version.outputs.version }}
-
-      - name: Add opencode to PATH
-        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
-
-      - name: Determine model from comment
-        id: model
-        env:
-          COMMENT: ${{ github.event.comment.body }}
         run: |
-          if echo "$COMMENT" | grep -qi "GEMINI"; then
-            echo "model=google/gemini-2.5-flash" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMENT" | grep -qi "BIGPICKLE"; then
-            echo "model=opencode/big-pickle" >> "$GITHUB_OUTPUT"
-          elif echo "$COMMENT" | grep -qi "NEMOTRON"; then
-            echo "model=opencode/nemotron-3-super-free" >> "$GITHUB_OUTPUT"
-          else
-            echo "model=opencode/deepseek-v4-flash-free" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Extract /oc command
-        id: command
-        env:
-          COMMENT: ${{ github.event.comment.body }}
-        run: |
-          CMD=$(echo "$COMMENT" | sed -n 's|^/oc[[:space:]]\\{1,\\}\\([^[:space:]]\\{1,\\}\\).*|\\1|p')
-          if [ -z "$CMD" ]; then
-            CMD=$(echo "$COMMENT" | sed -n 's|^/opencode[[:space:]]\\{1,\\}\\([^[:space:]]\\{1,\\}\\).*|\\1|p')
-          fi
-          echo "command=${CMD:-none}" >> "$GITHUB_OUTPUT"
-          echo "Dispatching /oc $CMD"
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run opencode
+        run: opencode github run
         env:
-          MODEL: ${{ steps.model.outputs.model }}
-          OPENCODE_TELEMETRY: "false"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          echo "Selected model: $MODEL"
-          echo "Command: ${{ steps.command.outputs.command }}"
-          jq --arg model "$MODEL" '.model = $model' opencode.json > opencode.tmp.json && mv opencode.tmp.json opencode.json
-          MAX_RETRIES=3
-          RETRY_DELAY=15
-          for i in $(seq 1 "$MAX_RETRIES"); do
-            echo "opencode run attempt $i of $MAX_RETRIES"
-            if opencode github run; then
-              echo "opencode completed successfully"
-              exit 0
-            fi
-            exit_code=$?
-            echo "opencode exit code: $exit_code"
-            if [ "$i" -eq "$MAX_RETRIES" ]; then
-              echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
-              exit 1
-            fi
-            echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
-            sleep "$RETRY_DELAY"
-          done
+          MODEL: {model}
+          USE_GITHUB_TOKEN: "true"
 """
 
 PR_CHECK_WORKFLOW = """\
@@ -450,6 +375,29 @@ jobs:
           tag_name: v${{ steps.version.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Build wheel
+        run: |
+          pip install hatchling
+          python -m hatchling build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
 """
 
 CODEQL_WORKFLOW = """\
