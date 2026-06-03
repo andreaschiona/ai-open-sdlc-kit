@@ -35,11 +35,11 @@ jobs:
             COMMITS=$(git log "$LAST_TAG..HEAD" --format="%s")
           fi
           if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
-            echo "type=major" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=major" >> "$GITHUB_ENV"
           elif echo "$COMMITS" | grep -q "^feat"; then
-            echo "type=minor" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=minor" >> "$GITHUB_ENV"
           else
-            echo "type=patch" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=patch" >> "$GITHUB_ENV"
           fi
 
       - name: Update version
@@ -54,7 +54,7 @@ jobs:
             CURRENT="0.0.0"
           fi
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          case "${{ steps.bump.outputs.type }}" in
+          case "$BUMP_TYPE" in
             major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
             minor) MINOR=$((MINOR+1)); PATCH=0 ;;
             patch) PATCH=$((PATCH+1)) ;;
@@ -104,7 +104,6 @@ jobs:
           VERSION_FILE="VERSION"
           [ -f "pyproject.toml" ] && VERSION_FILE="pyproject.toml"
           NEW_VERSION="${{ steps.version.outputs.new_version }}"
-          BUMP_TYPE="${{ steps.bump.outputs.type }}"
           while git tag -l "v$NEW_VERSION" | grep -q .; do
             echo "Tag v$NEW_VERSION already exists — incrementing"
             IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
