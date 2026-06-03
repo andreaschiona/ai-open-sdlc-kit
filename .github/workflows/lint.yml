@@ -1,0 +1,35 @@
+name: Lint
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  super-linter:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Super-Linter
+        uses: super-linter/super-linter@v8.6.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VALIDATE_ALL_CODEBASE: false
+          DEFAULT_BRANCH: main
+          VALIDATE_KOTLIN_KT_LINT: true
+          VALIDATE_KOTLIN_BIOME: true
+          VALIDATE_YAML: true
+          VALIDATE_JSON: true
+          VALIDATE_XML: true
+          VALIDATE_MARKDOWN: true
+          VALIDATE_PROPERTIES: true
+          VALIDATE_GITHUB_ACTIONS: true
+          FILTER_REGEX_EXCLUDE: \.jks$|\.jar$|\.keystore$
