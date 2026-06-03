@@ -90,8 +90,12 @@ class TestDetectEcosystem:
     def test_known_ecosystems(self):
         assert detect_ecosystem("Maven") == "maven"
         assert detect_ecosystem("npm") == "npm"
+        assert detect_ecosystem("Yarn") == "npm"
+        assert detect_ecosystem("pnpm") == "npm"
         assert detect_ecosystem("Cargo") == "cargo"
         assert detect_ecosystem("PEP 621") == "pip"
+        assert detect_ecosystem("setuptools") == "pip"
+        assert detect_ecosystem("pip") == "pip"
 
     def test_unknown_falls_back_to_pip(self):
         assert detect_ecosystem("Unknown") == "pip"

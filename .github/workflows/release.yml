@@ -42,30 +42,15 @@ jobs:
             echo "BUMP_TYPE=patch" >> "$GITHUB_ENV"
           fi
 
-      - name: Update version
+      - name: Bump version
         id: version
+        shell: bash
         run: |
-          VERSION_FILE="VERSION"
-          if [ -f "pyproject.toml" ]; then
-            CURRENT=$(python -c "import re; print(re.search(r'version\s*=\s*[\"']([^\"']+)[\"']', open('pyproject.toml').read()).group(1))" 2>/dev/null || echo "0.0.0")
-          elif [ -f "$VERSION_FILE" ]; then
-            CURRENT=$(grep -oP '^version=\K[0-9]+\.[0-9]+\.[0-9]+' "$VERSION_FILE" || echo "0.0.0")
-          else
-            CURRENT="0.0.0"
-          fi
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          case "$BUMP_TYPE" in
-            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH+1)) ;;
-          esac
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          OUTPUT=$(python -m osdlc.version update --root . 2>&1)
+          echo "update_output=$OUTPUT" >> "$GITHUB_OUTPUT"
+          NEW_VERSION=$(echo "$OUTPUT" | grep -oP '-> \K[0-9]+\.[0-9]+\.[0-9]+')
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          if [ -f "pyproject.toml" ]; then
-            sed -i "s/version = \"$CURRENT\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          else
-            echo "version=$NEW_VERSION" > "$VERSION_FILE"
-          fi
+          echo "$OUTPUT"
 
       - name: Install dependencies
         run: pip install pytest
@@ -125,8 +110,8 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          VERSION_FILE="VERSION"
-          [ -f "pyproject.toml" ] && VERSION_FILE="pyproject.toml"
+          VERSION_FILE=$(python -m osdlc.version detect --root . | cut -d' ' -f1)
+          [ -z "$VERSION_FILE" ] && VERSION_FILE="VERSION"
           git add "$VERSION_FILE"
           git commit -m "chore: bump version to ${{ steps.resolve.outputs.new_version }} [skip ci]"
           git tag v${{ steps.resolve.outputs.new_version }}
