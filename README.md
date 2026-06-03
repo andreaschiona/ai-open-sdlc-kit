@@ -57,7 +57,23 @@ Quick fixes skip the analyze/plan steps:
 - [GitHub CLI](https://cli.github.com/) (`gh`)
 - An opencode account at [opencode.ai](https://opencode.ai)
 
-### 1. Run the kit init
+### 1. Download the latest release
+
+```bash
+# Download and extract the latest release
+curl -LO https://github.com/andreaschiona/ai-open-sdlc-kit/releases/latest/download/ai-open-sdlc-kit.zip
+unzip ai-open-sdlc-kit.zip -d your-project
+cd your-project
+```
+
+Alternatively, clone the repository and copy the files:
+
+```bash
+git clone https://github.com/andreaschiona/ai-open-sdlc-kit.git
+cd ai-open-sdlc-kit
+```
+
+### 2. Run the kit init
 
 ```bash
 python osdlc.py init
@@ -78,7 +94,7 @@ Interactive mode will prompt you for:
 | Error-to-issue pipeline | No | Auto-report runtime errors as GitHub issues |
 | Default model | `opencode/deepseek-v4-flash-free` | AI model for opencode agents |
 
-### 2. Review the generated files
+### 3. Review the generated files
 
 ```bash
 # Directory structure created by the kit:
@@ -91,7 +107,7 @@ Interactive mode will prompt you for:
     └── dependabot.yml     # Automated dependency updates
 ```
 
-### 3. Start the SDLC cycle
+### 4. Start the SDLC cycle
 
 Create a GitHub issue for your feature or bug, then comment:
 
