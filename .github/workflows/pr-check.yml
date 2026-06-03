@@ -23,6 +23,9 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Install dependencies
+        run: pip install pytest
+
       - name: Lint
         run: python -m py_compile src/osdlc/*.py osdlc.py
 
