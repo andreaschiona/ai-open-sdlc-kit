@@ -33,6 +33,18 @@ OPECODE_JSON = """\
 AGENTS_MD = """\
 # {project_name} -- Agent Instructions
 
+## STOP -- Read This First
+
+You are handling a `/oc` slash command. You MUST:
+1. Parse the command from the triggering comment (analyze, plan, fix, implement, fixCheck).
+2. Execute ONLY that command's behavior as defined below.
+3. For `analyze` and `plan`: POST A COMMENT ONLY. Do NOT edit files, create branches, or PRs.
+4. For `fix`: push a branch only. Do NOT create a PR.
+5. For `implement`: this is the ONLY command that creates a PR.
+
+If the command is `analyze` or `plan`, your job is DONE after posting one comment via `gh issue comment`.
+DO NOT touch any source code files for analyze or plan commands.
+
 ## Project Overview
 
 {language_description}
@@ -70,6 +82,15 @@ When opencode is triggered by a comment:
 | `/oc plan` | Issue | (Requires prior analyze comment) Read the analysed functional requirement from the issue. Produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create or modify, the approach, and any dependencies. |
 | `/oc implement` | Issue | (Requires prior plan comment) Create a feature branch named `issue-{{number}}` from `{default_branch}`. Implement the plan file-by-file, committing each logical unit with a conventional commit message. Open a Pull Request targeting `{default_branch}` that includes `Closes #{{number}}` in the description. |
 | `/oc fixCheck` | PR | Read the PR's automated check results (lint errors, test failures). For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. When done (all passing or retries exhausted), post a status comment on the PR. |
+
+### CRITICAL RULES -- READ BEFORE ACTING
+
+- **`/oc analyze` MUST ONLY post a comment.** NEVER create branches, commits, or PRs for analyze.
+- **`/oc plan` MUST ONLY post a comment.** NEVER create branches, commits, or PRs for plan.
+- **`/oc fix` MUST NOT create a PR.** Only push the fix branch.
+- **`/oc implement` is the ONLY command that creates a PR.**
+- If the command is `analyze`, your ENTIRE output is a GitHub issue comment. Nothing else.
+- Execute EXACTLY ONE command per invocation. Do not chain or anticipate next steps.
 
 ### Instruction Payload
 
@@ -195,6 +216,59 @@ The `GITHUB_TOKEN` environment variable must be available at runtime with
 `issues: write` permission for the repository.
 """
 
+ANALYZE_SKILL = """\
+# Analyze Skill
+
+## Purpose
+
+This skill is activated when the `/oc analyze` command is detected.
+
+## RULES -- ABSOLUTE CONSTRAINTS
+
+1. You MUST NOT create any branch.
+2. You MUST NOT create any commit.
+3. You MUST NOT create any Pull Request.
+4. You MUST NOT modify any file in the repository.
+5. Your ONLY action is to post a single comment on the current issue.
+
+## Procedure
+
+1. Read the issue title and body.
+2. Read all existing comments on the issue.
+3. Examine the codebase to understand affected areas.
+4. Compose a detailed functional requirement analysis.
+5. Post it as a comment on the issue using `gh issue comment`.
+
+## Output Format
+
+Your comment MUST follow this structure:
+
+```
+## Functional Requirement Analysis
+
+### Problem Statement
+[Clear description of what needs to be solved]
+
+### Affected Areas
+[List of files, modules, or components impacted]
+
+### Acceptance Criteria
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+- ...
+
+### Open Questions
+- [Any ambiguities or decisions needed]
+```
+
+## Verification
+
+Before finishing, confirm:
+- Did I create any branch? If yes, ABORT -- you violated the rules.
+- Did I create any PR? If yes, ABORT -- you violated the rules.
+- Did I post exactly one comment? If no, something went wrong.
+"""
+
 OPECODE_WORKFLOW = """\
 name: opencode
 
@@ -238,11 +312,26 @@ jobs:
           curl -fsSL https://opencode.ai/install | bash
           echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
+      - name: Detect model from comment
+        id: detect
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          if echo "$COMMENT" | grep -qi "GEMINI"; then
+            echo "model=google/gemini-2.5-flash" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "BIGPICKLE"; then
+            echo "model=opencode/big-pickle" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "NEMOTRON"; then
+            echo "model=opencode/nemotron-3-super-free" >> "$GITHUB_OUTPUT"
+          else
+            echo "model={model}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run opencode
         run: opencode github run
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODEL: {model}
+          MODEL: ${{ steps.detect.outputs.model }}
           USE_GITHUB_TOKEN: "true"
 """
 
@@ -516,6 +605,7 @@ ALL_TEMPLATES = {
     ".opencode/.gitignore": DOT_GITIGNORE,
     ".opencode/skills/version-management/SKILL.md": VERSION_MANAGEMENT_SKILL,
     ".opencode/skills/error-handling/SKILL.md": ERROR_HANDLING_SKILL,
+    ".opencode/skills/analyze/SKILL.md": ANALYZE_SKILL,
     ".github/workflows/opencode.yml": OPECODE_WORKFLOW,
     ".github/workflows/pr-check.yml": PR_CHECK_WORKFLOW,
     ".github/workflows/release.yml": RELEASE_WORKFLOW,
