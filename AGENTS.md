@@ -26,15 +26,13 @@ When opencode is triggered by a comment:
 3. The remainder of the comment (after the command token) is the **instruction payload**.
 4. Route to the appropriate behaviour based on the command token.
 
-### Dispatch Table
+### Commands
 
-| Command | Scope | Behaviour |
-|---------|-------|-----------|
-| `/oc fix` | Issue | Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `main`, apply the fix, commit with `fix:`, and push. Do NOT create a PR. The payload may describe the fix intent. |
-| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. |
-| `/oc plan` | Issue | Requires prior analyze. Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. |
-| `/oc implement` | Issue | Requires prior plan. Create branch `issue-{{number}}` from `main`. Implement file-by-file, commit each unit conventionally. Open a PR targeting `main` with `Closes #{{number}}`. |
-| `/oc fixCheck` | PR | Read automated check results. For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. Post a status comment when done. |
+- **`/oc fix`** (Issue) - Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `main`, apply the fix, commit with `fix:`, and push. Do NOT create a PR. The payload may describe the fix intent.
+- **`/oc analyze`** (Issue) - Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions.
+- **`/oc plan`** (Issue) - Requires prior analyze. Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment.
+- **`/oc implement`** (Issue) - Requires prior plan. Create branch `issue-{{number}}` from `main`. Implement file-by-file, commit each unit conventionally. Open a PR targeting `main` with `Closes #{{number}}`.
+- **`/oc fixCheck`** (PR) - Read automated check results. For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. Post a status comment when done.
 
 ### Instruction Payload
 
@@ -46,12 +44,10 @@ Any text after the command token is the instruction payload. The agent MAY use i
 
 The workflow sets the model based on keywords anywhere in the comment (case-insensitive):
 
-| Keyword | Model |
-|---------|-------|
-| `GEMINI` | `google/gemini-2.5-flash` |
-| `BIGPICKLE` | `opencode/big-pickle` |
-| `NEMOTRON` | `opencode/nemotron-3-super-free` |
-| (default) | `opencode/deepseek-v4-flash-free` |
+- `GEMINI` -> `google/gemini-2.5-flash`
+- `BIGPICKLE` -> `opencode/big-pickle`
+- `NEMOTRON` -> `opencode/nemotron-3-super-free`
+- (default) -> `opencode/deepseek-v4-flash-free`
 
 ## Commit Convention
 
