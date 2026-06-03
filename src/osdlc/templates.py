@@ -51,23 +51,42 @@ AGENTS_MD = """\
 
 ## OpenCode Protocol
 
-The agent MUST recognise the following slash-commands in issue/PR comments.
-Each command is a single word prefixed with `/oc` (or `/opencode`), with the
-remainder of the comment treated as the instruction payload.
+The agent MUST handle slash-commands found in issue or PR comments.
+
+### Parsing
+
+When opencode is triggered by a comment:
+1. Read the comment body from the triggering event.
+2. If the comment starts with `/oc` or `/opencode`, extract the first whitespace-delimited token immediately following the prefix.
+3. The remainder of the comment (after the command token) is the **instruction payload**.
+4. Route to the appropriate behaviour based on the command token.
+
+### Dispatch Table
 
 | Command | Scope | Behaviour |
 |---------|-------|-----------|
-| `/oc fix` | Issue | Analyse the issue and apply a quick corrective change directly on the current branch or a throwaway fix branch. Commit with `fix:` prefix. |
-| `/oc analyze` | Issue | Read the issue body and all comments, perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include problem statement, affected areas, acceptance criteria, and open questions. |
-| `/oc plan` | Issue | (Requires prior analyze) Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create/modify, the approach, and any dependencies. |
-| `/oc implement` | Issue | (Requires prior plan) Create a feature branch named `issue-{{number}}` from `{default_branch}`, implement the plan file-by-file, commit each logical unit with conventional commit messages, and open a Pull Request targeting `{default_branch}` that includes `Closes #{{number}}` in the description. |
-| `/oc fixCheck` | PR | Read the PR's automated check results (lint errors, test failures). For each failure, apply a fix, amends the PR's branch, and re-trigger checks. Repeat up to 3 retries. Report status in a PR comment. |
+| `/oc fix` | Issue | Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `{default_branch}`, apply the fix, commit with `fix:` prefix, and push. Do NOT create a PR. The instruction payload may describe the fix intent. |
+| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. The instruction payload may scope the analysis. |
+| `/oc plan` | Issue | (Requires prior analyze comment) Read the analysed functional requirement from the issue. Produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create or modify, the approach, and any dependencies. |
+| `/oc implement` | Issue | (Requires prior plan comment) Create a feature branch named `issue-{{number}}` from `{default_branch}`. Implement the plan file-by-file, committing each logical unit with a conventional commit message. Open a Pull Request targeting `{default_branch}` that includes `Closes #{{number}}` in the description. |
+| `/oc fixCheck` | PR | Read the PR's automated check results (lint errors, test failures). For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. When done (all passing or retries exhausted), post a status comment on the PR. |
 
-Model overrides (include one keyword in the comment):
-- `GEMINI` -> google/gemini-2.5-flash
-- `BIGPICKLE` -> opencode/big-pickle
-- `NEMOTRON` -> opencode/nemotron-3-super-free
-- (default) -> opencode/deepseek-v4-flash-free
+### Instruction Payload
+
+Any text after the command token is the instruction payload. The agent MAY use it for additional context:
+- `/oc fix add null guard` → command `fix`, payload `add null guard`
+- `/oc analyze` → command `analyze`, payload empty
+
+### Model Overrides
+
+The workflow sets the model based on keywords anywhere in the comment (case-insensitive):
+
+| Keyword | Model |
+|---------|-------|
+| `GEMINI` | `google/gemini-2.5-flash` |
+| `BIGPICKLE` | `opencode/big-pickle` |
+| `NEMOTRON` | `opencode/nemotron-3-super-free` |
+| (default) | `opencode/deepseek-v4-flash-free` |
 
 ## Commit Convention
 
@@ -191,7 +210,17 @@ concurrency:
 
 jobs:
   opencode:
-    if: ${{ github.event.comment != null && github.event.comment.body != '' && github.repository_owner == github.event.comment.user.login }}
+    if: >
+      github.event_name != 'workflow_run' &&
+      github.event.comment != null &&
+      github.event.comment.body != '' &&
+      github.repository_owner == github.event.comment.user.login &&
+      (
+        startsWith(github.event.comment.body, '/oc ') ||
+        startsWith(github.event.comment.body, '/opencode ') ||
+        github.event.comment.body == '/oc' ||
+        github.event.comment.body == '/opencode'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -238,28 +267,57 @@ jobs:
 
       - name: Determine model from comment
         id: model
+        env:
+          COMMENT: ${{ github.event.comment.body }}
         run: |
-          BODY="${{ github.event.comment.body }}"
-          if echo "$BODY" | grep -qi "GEMINI"; then
-            echo "model=google/gemini-2.5-flash" >> $GITHUB_OUTPUT
-          elif echo "$BODY" | grep -qi "BIGPICKLE"; then
-            echo "model=opencode/big-pickle" >> $GITHUB_OUTPUT
-          elif echo "$BODY" | grep -qi "NEMOTRON"; then
-            echo "model=opencode/nemotron-3-super-free" >> $GITHUB_OUTPUT
+          if echo "$COMMENT" | grep -qi "GEMINI"; then
+            echo "model=google/gemini-2.5-flash" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "BIGPICKLE"; then
+            echo "model=opencode/big-pickle" >> "$GITHUB_OUTPUT"
+          elif echo "$COMMENT" | grep -qi "NEMOTRON"; then
+            echo "model=opencode/nemotron-3-super-free" >> "$GITHUB_OUTPUT"
           else
-            echo "model=opencode/deepseek-v4-flash-free" >> $GITHUB_OUTPUT
+            echo "model=opencode/deepseek-v4-flash-free" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Extract /oc command
+        id: command
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          CMD=$(echo "$COMMENT" | sed -n 's|^/oc[[:space:]]\\{1,\\}\\([^[:space:]]\\{1,\\}\\).*|\\1|p')
+          if [ -z "$CMD" ]; then
+            CMD=$(echo "$COMMENT" | sed -n 's|^/opencode[[:space:]]\\{1,\\}\\([^[:space:]]\\{1,\\}\\).*|\\1|p')
+          fi
+          echo "command=${CMD:-none}" >> "$GITHUB_OUTPUT"
+          echo "Dispatching /oc $CMD"
 
       - name: Run opencode
         env:
+          MODEL: ${{ steps.model.outputs.model }}
           OPENCODE_TELEMETRY: "false"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          for i in 1 2 3; do
-            echo "Attempt $i/3"
-            jq '.model = "${{ steps.model.outputs.model }}"' opencode.json > tmp.json && mv tmp.json opencode.json
-            opencode github run && break || sleep 15
+          echo "Selected model: $MODEL"
+          echo "Command: ${{ steps.command.outputs.command }}"
+          jq --arg model "$MODEL" '.model = $model' opencode.json > opencode.tmp.json && mv opencode.tmp.json opencode.json
+          MAX_RETRIES=3
+          RETRY_DELAY=15
+          for i in $(seq 1 "$MAX_RETRIES"); do
+            echo "opencode run attempt $i of $MAX_RETRIES"
+            if opencode github run; then
+              echo "opencode completed successfully"
+              exit 0
+            fi
+            exit_code=$?
+            echo "opencode exit code: $exit_code"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
+              exit 1
+            fi
+            echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
           done
 """
 
