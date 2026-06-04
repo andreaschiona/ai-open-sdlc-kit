@@ -48,6 +48,15 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Configure git for push
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin https://x-access-token:${TOKEN}@github.com/${{ github.repository }}
+
       - name: Install jq
         shell: bash
         run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
@@ -104,6 +113,7 @@ jobs:
           MODEL: ${{ steps.model_select.outputs.model }}
           OPENCODE_TELEMETRY: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          USE_GITHUB_TOKEN: "true"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           echo "Selected model: $MODEL"
