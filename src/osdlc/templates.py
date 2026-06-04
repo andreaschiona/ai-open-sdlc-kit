@@ -78,8 +78,8 @@ When opencode is triggered by a comment:
 | Command | Scope | Behaviour |
 |---------|-------|-----------|
 | `/oc fix` | Issue | Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `{default_branch}`, apply the fix, commit with `fix:` prefix, and push. Do NOT create a PR. The instruction payload may describe the fix intent. |
-| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. The instruction payload may scope the analysis. |
-| `/oc plan` | Issue | (Requires prior analyze comment) Read the analysed functional requirement from the issue. Produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create or modify, the approach, and any dependencies. |
+| `/oc analyze` | Issue | Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. DO NOT create any branch, commit, or Pull Request. The instruction payload may scope the analysis. |
+| `/oc plan` | Issue | (Requires prior analyze comment) Read the analysed functional requirement from the issue. Produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. List each file to create or modify, the approach, and any dependencies. DO NOT create any branch, commit, or Pull Request. |
 | `/oc implement` | Issue | (Requires prior plan comment) Create a feature branch named `issue-{{number}}` from `{default_branch}`. Implement the plan file-by-file, committing each logical unit with a conventional commit message. Open a Pull Request targeting `{default_branch}` that includes `Closes #{{number}}` in the description. |
 | `/oc fixCheck` | PR | Read the PR's automated check results (lint errors, test failures). For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. When done (all passing or retries exhausted), post a status comment on the PR. |
 
@@ -214,6 +214,64 @@ All auto-reported issues MUST include the labels: `bug`, `auto-reported`.
 
 The `GITHUB_TOKEN` environment variable must be available at runtime with
 `issues: write` permission for the repository.
+"""
+
+PLAN_SKILL = """\
+# Plan Skill
+
+## Purpose
+
+This skill is activated when the `/oc plan` command is detected.
+
+## RULES -- ABSOLUTE CONSTRAINTS
+
+1. You MUST NOT create any branch.
+2. You MUST NOT create any commit.
+3. You MUST NOT create any Pull Request.
+4. You MUST NOT modify any file in the repository.
+5. Your ONLY action is to post a single comment on the current issue.
+
+## Procedure
+
+1. Read the issue title and body.
+2. Read all existing comments on the issue, especially the functional requirement analysis.
+3. Examine the codebase to understand affected areas.
+4. Compose a detailed technical implementation plan with file-level breakdown.
+5. Post it as a comment on the issue using `gh issue comment`.
+
+## Output Format
+
+Your comment MUST follow this structure:
+
+```
+## Technical Implementation Plan
+
+### Overview
+[Brief summary of the implementation approach]
+
+### Files to Modify
+- `path/to/file1`: [What changes are needed]
+- `path/to/file2`: [What changes are needed]
+- ...
+
+### Implementation Steps
+1. [Step 1 description]
+2. [Step 2 description]
+...
+
+### Dependencies
+[Any prerequisites or dependencies]
+
+### Risk Assessment
+[Potential risks and mitigation strategies]
+```
+
+## Verification
+
+Before finishing, confirm:
+- Did I create any branch? If yes, ABORT -- you violated the rules.
+- Did I create any PR? If yes, ABORT -- you violated the rules.
+- Did I post exactly one comment? If no, something went wrong.
 """
 
 ANALYZE_SKILL = """\
@@ -606,6 +664,7 @@ ALL_TEMPLATES = {
     ".opencode/skills/version-management/SKILL.md": VERSION_MANAGEMENT_SKILL,
     ".opencode/skills/error-handling/SKILL.md": ERROR_HANDLING_SKILL,
     ".opencode/skills/analyze/SKILL.md": ANALYZE_SKILL,
+    ".opencode/skills/plan/SKILL.md": PLAN_SKILL,
     ".github/workflows/opencode.yml": OPECODE_WORKFLOW,
     ".github/workflows/pr-check.yml": PR_CHECK_WORKFLOW,
     ".github/workflows/release.yml": RELEASE_WORKFLOW,

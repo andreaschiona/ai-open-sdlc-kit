@@ -29,8 +29,8 @@ When opencode is triggered by a comment:
 ### Commands
 
 - **`/oc fix`** (Issue) - Apply a quick corrective change. Analyse the issue, create a throwaway fix branch from `main`, apply the fix, commit with `fix:`, and push. Do NOT create a PR. The payload may describe the fix intent.
-- **`/oc analyze`** (Issue) - Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions.
-- **`/oc plan`** (Issue) - Requires prior analyze. Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment.
+- **`/oc analyze`** (Issue) - Read the issue body and all comments. Perform a critical analysis, then post a detailed functional requirement as a new issue comment. Include: problem statement, affected areas, acceptance criteria, and open questions. DO NOT create any branch, commit, or Pull Request.
+- **`/oc plan`** (Issue) - Requires prior analyze. Read the analysed requirement, produce a technical implementation plan with file-level breakdown, and post it as a new issue comment. DO NOT create any branch, commit, or Pull Request.
 - **`/oc implement`** (Issue) - Requires prior plan. Create branch `issue-{{number}}` from `main`. Implement file-by-file, commit each unit conventionally. Open a PR targeting `main` with `Closes #{{number}}`.
 - **`/oc fixCheck`** (PR) - Read automated check results. For each failure, apply a fix, amend the PR branch, and re-trigger checks. Repeat up to 3 retries. Post a status comment when done.
 
