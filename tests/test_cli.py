@@ -81,3 +81,33 @@ class TestMainEntryPoint:
         sys.argv = ["run.py", "init", "--non-interactive", "-f", "--target", git_init]
         result = main()
         assert result == 0
+
+    def test_main_upgrade_non_scaffolded_fails(self, git_init):
+        from osdlc.cli import main
+        sys.argv = ["run.py", "upgrade", "--non-interactive", "--target", git_init]
+        result = main()
+        assert result == 1
+
+    def test_main_upgrade_after_init_succeeds(self, git_init):
+        from osdlc.cli import main
+        sys.argv = ["run.py", "init", "--non-interactive", "--target", git_init]
+        main()
+        sys.argv = ["run.py", "upgrade", "--non-interactive", "--target", git_init]
+        result = main()
+        assert result == 0
+
+    def test_main_upgrade_dry_run(self, git_init):
+        from osdlc.cli import main
+        sys.argv = ["run.py", "init", "--non-interactive", "--target", git_init]
+        main()
+        sys.argv = ["run.py", "upgrade", "--non-interactive", "--dry-run", "--target", git_init]
+        result = main()
+        assert result == 0
+
+    def test_main_upgrade_print_summary(self, git_init):
+        from osdlc.cli import main
+        sys.argv = ["run.py", "init", "--non-interactive", "--target", git_init]
+        main()
+        sys.argv = ["run.py", "upgrade", "--non-interactive", "--target", git_init]
+        result = main()
+        assert result == 0
