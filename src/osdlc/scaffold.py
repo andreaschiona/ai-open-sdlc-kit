@@ -1,5 +1,37 @@
 import os
+import json
+import hashlib
 from osdlc.templates import ALL_TEMPLATES
+from osdlc.version import KIT_VERSION
+
+OSDLC_STATE_FILE = ".osdlc-state.json"
+
+TEMPLATE_FILES_TO_SKIP = {OSDLC_STATE_FILE}
+
+
+def calculate_checksum(content):
+    if isinstance(content, str):
+        content = content.encode("utf-8")
+    return hashlib.sha256(content).hexdigest()
+
+
+def read_state(root):
+    state_path = os.path.join(root, OSDLC_STATE_FILE)
+    if not os.path.exists(state_path):
+        return None
+    with open(state_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def write_state(root, kit_version, file_checksums):
+    state_path = os.path.join(root, OSDLC_STATE_FILE)
+    state = {
+        "kit_version": kit_version,
+        "files": file_checksums,
+    }
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+        f.write("\n")
 
 
 def detect_codeql_languages(language):
@@ -178,6 +210,9 @@ def scaffold(config, root=".", force=False):
     if not config.get("error_to_issue"):
         templates.pop(".opencode/skills/error-handling/SKILL.md", None)
 
+    for key in TEMPLATE_FILES_TO_SKIP:
+        templates.pop(key, None)
+
     dirs_to_create = set()
     for filepath in templates:
         full_path = os.path.join(root, filepath)
@@ -203,4 +238,128 @@ def scaffold(config, root=".", force=False):
         except Exception as e:
             errors.append((filepath, str(e)))
 
+    checksums = {}
+    for filepath in templates:
+        full_path = os.path.join(root, filepath)
+        if os.path.exists(full_path):
+            with open(full_path, "rb") as f:
+                checksums[filepath] = calculate_checksum(f.read())
+    write_state(root, KIT_VERSION, checksums)
+
     return generated, skipped, errors
+
+
+def upgrade_scaffold(config, root=".", dry_run=False):
+    vars_dict = build_template_vars(config)
+    updated = []
+    skipped = []
+    conflicts = []
+    added = []
+    removed = []
+    errors = []
+
+    state = read_state(root)
+    if state is None:
+        return updated, skipped, conflicts, added, removed, [
+            ("<project>", "Project was not scaffolded. Run 'osdlc init' first.")
+        ]
+
+    old_version = state["kit_version"]
+    old_checksums = state.get("files", {})
+
+    templates = dict(ALL_TEMPLATES)
+    if not config.get("error_to_issue"):
+        templates.pop(".opencode/skills/error-handling/SKILL.md", None)
+
+    for key in TEMPLATE_FILES_TO_SKIP:
+        templates.pop(key, None)
+
+    dirs_to_create = set()
+    for filepath in templates:
+        full_path = os.path.join(root, filepath)
+        parent = os.path.dirname(full_path)
+        if parent:
+            dirs_to_create.add(parent)
+
+    if not dry_run:
+        for d in sorted(dirs_to_create):
+            os.makedirs(d, exist_ok=True)
+
+    new_files = [fp for fp in templates if fp not in old_checksums]
+    for filepath in new_files:
+        try:
+            content = render_template(templates[filepath], vars_dict)
+            if not dry_run:
+                full_path = os.path.join(root, filepath)
+                with open(full_path, "w", newline="\n", encoding="utf-8") as f:
+                    f.write(content)
+            added.append(filepath)
+        except Exception as e:
+            errors.append((filepath, str(e)))
+
+    removed_files = [fp for fp in old_checksums if fp not in templates]
+    removed = removed_files
+
+    for filepath in templates:
+        if filepath in new_files:
+            continue
+
+        template = templates[filepath]
+        old_checksum = old_checksums.get(filepath)
+        if old_checksum is None:
+            continue
+
+        full_path = os.path.join(root, filepath)
+
+        if not os.path.exists(full_path):
+            try:
+                content = render_template(template, vars_dict)
+                if not dry_run:
+                    with open(full_path, "w", newline="\n", encoding="utf-8") as f:
+                        f.write(content)
+                updated.append(filepath)
+            except Exception as e:
+                errors.append((filepath, str(e)))
+            continue
+
+        try:
+            new_content = render_template(template, vars_dict)
+        except Exception as e:
+            errors.append((filepath, str(e)))
+            continue
+
+        new_checksum = calculate_checksum(new_content.encode("utf-8"))
+
+        try:
+            with open(full_path, "rb") as f:
+                current_content_bytes = f.read()
+            current_checksum = calculate_checksum(current_content_bytes)
+        except Exception as e:
+            errors.append((filepath, str(e)))
+            continue
+
+        if current_checksum == old_checksum:
+            if not dry_run:
+                with open(full_path, "w", newline="\n", encoding="utf-8") as f:
+                    f.write(new_content)
+            updated.append(filepath)
+        else:
+            if new_checksum == old_checksum:
+                skipped.append(filepath)
+            else:
+                if not dry_run:
+                    conflict_path = full_path + ".new"
+                    with open(conflict_path, "w", newline="\n", encoding="utf-8") as f:
+                        f.write(new_content)
+                conflicts.append(filepath)
+
+    if not dry_run:
+        new_checksums = {}
+        for filepath in templates:
+            full_path = os.path.join(root, filepath)
+            if os.path.exists(full_path):
+                with open(full_path, "rb") as f:
+                    new_checksums[filepath] = calculate_checksum(f.read())
+        write_state(root, KIT_VERSION, new_checksums)
+
+    return updated, skipped, conflicts, added, removed, errors

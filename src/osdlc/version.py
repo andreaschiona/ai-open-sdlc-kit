@@ -4,6 +4,8 @@ import json
 import subprocess
 import sys
 
+KIT_VERSION = "0.3.3"
+
 VERSION_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 VERSION_FILE_PROBES = [
