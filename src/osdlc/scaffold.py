@@ -13,7 +13,7 @@ def detect_codeql_languages(language):
         "Rust": "rust",
         "Go": "go",
         "Ruby": "ruby",
-        "PHP": "python",
+        "PHP": "php",
         "C/C++": "cpp",
         "C#": "csharp",
         "Swift": "swift",
