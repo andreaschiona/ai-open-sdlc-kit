@@ -84,7 +84,7 @@ jobs:
       - name: Install opencode
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
-        run: curl -fsSL https://opencode.ai/install | sh -s -- ${{ steps.version.outputs.version }}
+        run: curl -fsSL https://opencode.ai/install | bash -s -- ${{ steps.version.outputs.version }}
 
       - name: Add opencode to PATH
         shell: bash
@@ -201,7 +201,7 @@ jobs:
       - name: Install opencode
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
-        run: curl -fsSL https://opencode.ai/install | sh -s -- ${{ steps.version.outputs.version }}
+        run: curl -fsSL https://opencode.ai/install | bash -s -- ${{ steps.version.outputs.version }}
 
       - name: Add opencode to PATH
         shell: bash
