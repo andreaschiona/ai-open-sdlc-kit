@@ -2,7 +2,6 @@ import os
 import re
 from datetime import date
 from dataclasses import dataclass, field
-from osdlc.llm import LLMClient
 
 DEFAULT_CATEGORIES = [
     "architettura-enterprise",
@@ -212,64 +211,12 @@ class WikiIndex:
 
 
 class WikiIngestor:
-    def __init__(self, root: str, llm: "LLMClient | None" = None):
+    def __init__(self, root: str):
         self.root = root
         self.raw_dir = os.path.join(root, "raw")
         self.wiki_dir = os.path.join(root, "wiki")
-        self.llm = llm
-
-    def _skill_path(self) -> str:
-        return os.path.join(self.root, ".opencode", "skills", "wiki", "SKILL.md")
 
     def ingest(self, source_path: str, category: str = "metodologie-dev") -> WikiPage:
-        with open(source_path, "r", encoding="utf-8") as f:
-            raw_text = f.read()
-
-        if self.llm and self.llm.available:
-            return self._llm_ingest(raw_text, source_path, category)
-
-        return self._heuristic_ingest(raw_text, source_path, category)
-
-    def _llm_ingest(self, raw_text: str, source_path: str, category: str) -> WikiPage:
-        skill = self.llm.read_skill(self._skill_path())
-        system_prompt = skill if skill else "Sei un assistente che genera pagine wiki strutturate in markdown."
-
-        rel_path = os.path.relpath(source_path, self.root)
-        user_prompt = (
-            f"Genera una pagina wiki in markdown per la seguente fonte. "
-            f"Categoria: {category}. Fonte: {rel_path}\n\n"
-            f"--- INIZIO FONTE ---\n{raw_text}\n--- FINE FONTE ---"
-        )
-
-        response = self.llm.chat([
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ])
-
-        fm, body = extract_frontmatter(response)
-        title = fm.get("titolo", fm.get("title", slugify(os.path.basename(source_path).replace(".md", ""))))
-        slug = slugify(title)
-        tags_str = fm.get("tags", category)
-        tags = [t.strip() for t in tags_str.split(",") if t.strip()]
-
-        page = WikiPage(
-            slug=slug,
-            title=title,
-            category=category,
-            tags=tags or [category],
-            created=today_str(),
-            updated=today_str(),
-            sources=[rel_path],
-        )
-
-        cat_dir = os.path.join(self.wiki_dir, category)
-        os.makedirs(cat_dir, exist_ok=True)
-        filepath = os.path.join(cat_dir, page.filename)
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(response)
-        return page
-
-    def _heuristic_ingest(self, raw_text: str, source_path: str, category: str) -> WikiPage:
         with open(source_path, "r", encoding="utf-8") as f:
             raw_text = f.read()
 

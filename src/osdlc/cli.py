@@ -4,7 +4,6 @@ import argparse
 from osdlc.detector import detect_project_type, suggest_language_by_extension
 from osdlc.scaffold import scaffold, upgrade_scaffold
 from osdlc.wiki import WikiIndex, WikiIngestor, WikiLinter, DEFAULT_CATEGORIES
-from osdlc.llm import LLMClient
 from osdlc.version import KIT_VERSION
 
 
@@ -157,13 +156,7 @@ def run_wiki(args):
         cat = args.category
         if not cat:
             cat = DEFAULT_CATEGORIES[1]
-        llm = LLMClient()
-        if llm.available:
-            print(f"LLM connected ({llm.provider or 'openai-compatible'}, model: {llm.model})")
-        else:
-            print("No LLM configured — using heuristic extraction.")
-            print("  Set LLM_API_KEY (or OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY)")
-        ingestor = WikiIngestor(root, llm=llm)
+        ingestor = WikiIngestor(root)
         page = ingestor.ingest(source, category=cat)
         index = WikiIndex(root)
         index.write()
