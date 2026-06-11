@@ -1,6 +1,6 @@
 [project]
 name = "osdlc-kit"
-version = "0.4.0"
+version = "0.3.4"
 description = "CLI scaffolding tool that bootstraps any Git repository with an opencode-native SDLC methodology"
 readme = "README.md"
 requires-python = ">=3.8"
