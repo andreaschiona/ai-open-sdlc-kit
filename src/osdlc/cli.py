@@ -3,7 +3,6 @@ import sys
 import argparse
 from osdlc.detector import detect_project_type, suggest_language_by_extension
 from osdlc.scaffold import scaffold, upgrade_scaffold
-from osdlc.wiki import WikiIndex, WikiIngestor, WikiLinter, DEFAULT_CATEGORIES
 from osdlc.version import KIT_VERSION
 
 
@@ -116,88 +115,13 @@ def check_git_repo(root="."):
         return False
 
 
-def run_wiki(args):
-    root = os.path.abspath(args.target)
-    rest = getattr(args, "wiki_args", [])
-    if not rest:
-        print("Usage: osdlc wiki <init|ingest|index|lint> [options]")
-        print()
-        print("Commands:")
-        print("  init              Create wiki directory structure")
-        print("  ingest <file>     Ingest a raw source into the wiki")
-        print("  index             Rebuild the master index")
-        print("  lint              Scan wiki for issues")
-        return 1
-
-    subcmd = rest[0]
-
-    if subcmd == "init":
-        raw_dir = os.path.join(root, "raw")
-        wiki_dir = os.path.join(root, "wiki")
-        os.makedirs(raw_dir, exist_ok=True)
-        for cat in DEFAULT_CATEGORIES:
-            os.makedirs(os.path.join(wiki_dir, cat), exist_ok=True)
-        index = WikiIndex(root)
-        index.write()
-        print(f"Wiki structure created at {root}")
-        print(f"  raw/ ({len(os.listdir(raw_dir))} files)")
-        print(f"  wiki/ ({len(DEFAULT_CATEGORIES)} categories)")
-        print(f"  indice (index file)")
-        return 0
-
-    elif subcmd == "ingest":
-        if len(rest) < 2:
-            print("Usage: osdlc wiki ingest <file> [--category <cat>]")
-            return 1
-        source = rest[1]
-        if not os.path.isfile(source):
-            print(f"Error: file not found: {source}")
-            return 1
-        cat = args.category
-        if not cat:
-            cat = DEFAULT_CATEGORIES[1]
-        ingestor = WikiIngestor(root)
-        page = ingestor.ingest(source, category=cat)
-        index = WikiIndex(root)
-        index.write()
-        print(f"Ingested: {page.title}")
-        print(f"  -> wiki/{page.category}/{page.filename}")
-        print(f"  tags: {', '.join(page.tags)}")
-        return 0
-
-    elif subcmd == "index":
-        index = WikiIndex(root)
-        index.write()
-        print(f"Index rebuilt: {index.index_path}")
-        categories = index.get_categories()
-        print(f"  Categories: {len(categories)}")
-        total = sum(len(index.get_pages(c)) for c in categories)
-        print(f"  Pages: {total}")
-        return 0
-
-    elif subcmd == "lint":
-        linter = WikiLinter(root)
-        issues = linter.lint()
-        if not issues:
-            print("No issues found.")
-        else:
-            for issue in issues:
-                print(f"  ! {issue}")
-        return 1 if issues else 0
-
-    else:
-        print(f"Unknown wiki subcommand: {subcmd}")
-        print("Available: init, ingest, index, lint")
-        return 1
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="AI Open SDLC Kit - Bootstrap your repository with SDLC methodology"
     )
     parser.add_argument(
         "command", nargs="?", default="init",
-        choices=["init", "upgrade", "wiki"],
+        choices=["init", "upgrade"],
         help="Command to run (default: init)"
     )
     parser.add_argument(
@@ -216,19 +140,8 @@ def main():
         "--dry-run", "-n", action="store_true",
         help="Show what would change without modifying files"
     )
-    parser.add_argument(
-        "--category", default=None,
-        help="Wiki category for ingest (default: auto-detect)"
-    )
-    parser.add_argument(
-        "wiki_args", nargs="*",
-        help="Wiki subcommand and its arguments (init|ingest|index|lint)"
-    )
 
     args = parser.parse_args()
-
-    if args.command == "wiki":
-        return run_wiki(args)
 
     if args.command not in ("init", "upgrade"):
         print(f"Unknown command: {args.command}")
