@@ -241,29 +241,29 @@ def run_upgrade(root, args):
     detected = detect_project_type(root)
     ext_lang = suggest_language_by_extension(root)
 
-    if args.non_interactive:
-        if detected:
-            config = detected.copy()
-        else:
-            config = {
-                "build_system": "unknown",
-                "language": ext_lang or "unknown",
-                "version_file": "VERSION",
-                "build_cmd": "echo 'no build command configured'",
-                "test_cmd": "echo 'no test command configured'",
-                "lint_cmd": "echo 'no lint command configured'",
-                "probe": "manual",
-            }
-        config.setdefault("project_name", os.path.basename(root))
-        config.setdefault("default_branch", "main")
-        config.setdefault("error_to_issue", False)
-        config.setdefault("provider_google", "")
-        config.setdefault("model", "opencode/deepseek-v4-flash-free")
-        config.setdefault("env_notes", "No special environment constraints.")
-        config.setdefault("architectural_notes", "")
+    if not args.non_interactive:
+        print("Running upgrade in non-interactive mode (using detected configuration).")
+        print("Pass --non-interactive explicitly to silence this message.")
+
+    if detected:
+        config = detected.copy()
     else:
-        print("Upgrade requires --non-interactive mode.")
-        return 1
+        config = {
+            "build_system": "unknown",
+            "language": ext_lang or "unknown",
+            "version_file": "VERSION",
+            "build_cmd": "echo 'no build command configured'",
+            "test_cmd": "echo 'no test command configured'",
+            "lint_cmd": "echo 'no lint command configured'",
+            "probe": "manual",
+        }
+    config.setdefault("project_name", os.path.basename(root))
+    config.setdefault("default_branch", "main")
+    config.setdefault("error_to_issue", False)
+    config.setdefault("provider_google", "")
+    config.setdefault("model", "opencode/deepseek-v4-flash-free")
+    config.setdefault("env_notes", "No special environment constraints.")
+    config.setdefault("architectural_notes", "")
 
     from osdlc.scaffold import read_state
     state = read_state(root)
