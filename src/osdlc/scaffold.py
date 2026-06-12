@@ -45,13 +45,11 @@ def detect_codeql_languages(language):
         "Rust": "rust",
         "Go": "go",
         "Ruby": "ruby",
-        "PHP": "python",
         "C/C++": "cpp",
         "C#": "csharp",
         "Swift": "swift",
-        "Elixir": "python",
     }
-    return mapping.get(language, "python")
+    return mapping.get(language, "")
 
 
 def detect_ecosystem(build_system):

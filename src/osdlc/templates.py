@@ -1,4 +1,4 @@
-OPECODE_JSON = """\
+OPENCODE_JSON = """\
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
@@ -327,7 +327,7 @@ Before finishing, confirm:
 - Did I post exactly one comment? If no, something went wrong.
 """
 
-OPECODE_WORKFLOW = """\
+OPENCODE_WORKFLOW = """\
 name: opencode
 
 on:
@@ -657,7 +657,7 @@ updates:
 
 
 ALL_TEMPLATES = {
-    "opencode.json": OPECODE_JSON,
+    "opencode.json": OPENCODE_JSON,
     "AGENTS.md": AGENTS_MD,
     ".opencode/package.json": PACKAGE_JSON,
     ".opencode/.gitignore": DOT_GITIGNORE,
@@ -665,7 +665,7 @@ ALL_TEMPLATES = {
     ".opencode/skills/error-handling/SKILL.md": ERROR_HANDLING_SKILL,
     ".opencode/skills/analyze/SKILL.md": ANALYZE_SKILL,
     ".opencode/skills/plan/SKILL.md": PLAN_SKILL,
-    ".github/workflows/opencode.yml": OPECODE_WORKFLOW,
+    ".github/workflows/opencode.yml": OPENCODE_WORKFLOW,
     ".github/workflows/pr-check.yml": PR_CHECK_WORKFLOW,
     ".github/workflows/release.yml": RELEASE_WORKFLOW,
     ".github/workflows/codeql.yml": CODEQL_WORKFLOW,

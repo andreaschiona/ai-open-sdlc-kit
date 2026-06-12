@@ -56,9 +56,9 @@ def detect_project_type(root="."):
 
 def suggest_language_by_extension(root="."):
     counts = {}
-    for entry in os.scandir(root):
-        if entry.is_file():
-            _, ext = os.path.splitext(entry.name)
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            _, ext = os.path.splitext(name)
             if ext in LANGUAGE_EXTENSIONS:
                 lang = LANGUAGE_EXTENSIONS[ext]
                 counts[lang] = counts.get(lang, 0) + 1

@@ -17,7 +17,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ steps.resolve.outputs.new_version }}
+      new_version: ${{ steps.version.outputs.new_version }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -86,29 +86,6 @@ jobs:
         if: steps.tests.outcome == 'failure'
         run: exit 1
 
-      - name: Resolve version (increment if tag exists)
-        id: resolve
-        run: |
-          VERSION_FILE="VERSION"
-          [ -f "pyproject.toml" ] && VERSION_FILE="pyproject.toml"
-          NEW_VERSION="${{ steps.version.outputs.new_version }}"
-          while git tag -l "v$NEW_VERSION" | grep -q .; do
-            echo "Tag v$NEW_VERSION already exists — incrementing"
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
-            case "$BUMP_TYPE" in
-              major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-              minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-              patch) PATCH=$((PATCH+1)) ;;
-            esac
-            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
-          done
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          if [ -f "pyproject.toml" ]; then
-            sed -i "s/version = \"[0-9.]*\"/version = \"$NEW_VERSION\"/" pyproject.toml
-          else
-            echo "version=$NEW_VERSION" > "$VERSION_FILE"
-          fi
-
       - name: Commit version bump
         run: |
           git config user.name "github-actions"
@@ -116,18 +93,18 @@ jobs:
           VERSION_FILE=$(python src/osdlc/version.py detect --root . | cut -d' ' -f1)
           [ -z "$VERSION_FILE" ] && VERSION_FILE="VERSION"
           git add "$VERSION_FILE"
-          git commit -m "chore: bump version to ${{ steps.resolve.outputs.new_version }} [skip ci]"
-          git tag v${{ steps.resolve.outputs.new_version }}
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag v${{ steps.version.outputs.new_version }}
 
       - name: Push changes
         run: |
           git push origin main
-          git push origin v${{ steps.resolve.outputs.new_version }}
+          git push origin v${{ steps.version.outputs.new_version }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ steps.resolve.outputs.new_version }}
+          tag_name: v${{ steps.version.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
 

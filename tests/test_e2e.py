@@ -107,7 +107,7 @@ class TestE2EGitHubCycle:
         time.sleep(5)
 
         runs = subprocess.run(
-            ["gh", "run", "list", "--repo", f"{clone_dir}",
+            ["gh", "run", "list", "--repo", f"{username}/{repo_name}",
              "--limit", "5", "--json", "name,status,conclusion"],
             capture_output=True, text=True, timeout=30,
             env={**os.environ, "GH_REPO": "", "PWD": PROJECT_ROOT},
