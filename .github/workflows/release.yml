@@ -17,7 +17,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     outputs:
-      new_version: ${{ steps.version.outputs.new_version }}
+      new_version: ${{ steps.resolve.outputs.new_version }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -86,25 +86,36 @@ jobs:
         if: steps.tests.outcome == 'failure'
         run: exit 1
 
+      - name: Resolve tag collision
+        id: resolve
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          while git tag -l "v$NEW_VERSION" | grep -q .; do
+            echo "Tag v$NEW_VERSION already exists — incrementing patch"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
+            PATCH=$((PATCH+1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            python src/osdlc/version.py set "$NEW_VERSION" --root .
+          done
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Commit version bump
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          VERSION_FILE=$(python src/osdlc/version.py detect --root . | cut -d' ' -f1)
-          [ -z "$VERSION_FILE" ] && VERSION_FILE="VERSION"
-          git add "$VERSION_FILE"
-          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
-          git tag v${{ steps.version.outputs.new_version }}
+          git add "$(python src/osdlc/version.py detect --root . | cut -d' ' -f1)"
+          git commit -m "chore: bump version to ${{ steps.resolve.outputs.new_version }} [skip ci]"
+          git tag v${{ steps.resolve.outputs.new_version }}
 
       - name: Push changes
         run: |
           git push origin main
-          git push origin v${{ steps.version.outputs.new_version }}
+          git push origin v${{ steps.resolve.outputs.new_version }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ steps.version.outputs.new_version }}
+          tag_name: v${{ steps.resolve.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
 
