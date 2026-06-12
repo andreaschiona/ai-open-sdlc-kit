@@ -5,6 +5,7 @@ import hashlib
 import pytest
 from osdlc.templates import ALL_TEMPLATES
 from osdlc.scaffold import scaffold, build_template_vars, detect_codeql_languages, detect_ecosystem, detect_language_setup_step
+from osdlc.version import KIT_VERSION
 
 
 class TestScaffold:
@@ -316,7 +317,7 @@ class TestUpgradeScaffold:
         upgrade_scaffold(minimal_config, root=temp_dir)
         state = read_state(temp_dir)
         assert state is not None
-        assert state["kit_version"] == "0.3.3"
+        assert state["kit_version"] == KIT_VERSION
 
     def test_upgrade_no_state_file_returns_error(self, temp_dir, minimal_config):
         from osdlc.scaffold import upgrade_scaffold

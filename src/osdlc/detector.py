@@ -16,6 +16,7 @@ PROBES = [
     ("Gemfile",             "Bundler",     "Ruby",        "lib/version.rb",       "bundle exec rake build", "bundle exec rspec",   "bundle exec rubocop"),
     ("CMakeLists.txt",      "CMake",       "C/C++",       "CMakeLists.txt",       "cmake --build build",   "ctest",               "cmake --build build --target lint"),
     ("mix.exs",             "Mix",         "Elixir",      "mix.exs",              "mix compile",           "mix test",            "mix credo"),
+    ("Package.swift",       "SPM",         "Swift",       "Package.swift",        "swift build",           "swift test",          "swift format --lint"),
 ]
 
 LANGUAGE_EXTENSIONS = {
@@ -38,6 +39,16 @@ LANGUAGE_EXTENSIONS = {
 }
 
 
+def _has_extension(root, ext):
+    try:
+        for f in os.listdir(root):
+            if f.endswith(ext):
+                return True
+    except PermissionError:
+        pass
+    return False
+
+
 def detect_project_type(root="."):
     for probe, build_system, language, version_file, build_cmd, test_cmd, lint_cmd in PROBES:
         path = os.path.join(root, probe)
@@ -51,6 +62,18 @@ def detect_project_type(root="."):
                 "lint_cmd": lint_cmd,
                 "probe": probe,
             }
+
+    if _has_extension(root, ".csproj") or _has_extension(root, ".sln"):
+        return {
+            "build_system": ".NET",
+            "language": "C#",
+            "version_file": "VERSION",
+            "build_cmd": "dotnet build",
+            "test_cmd": "dotnet test",
+            "lint_cmd": "dotnet format --verify-no-changes",
+            "probe": ".csproj",
+        }
+
     return None
 
 

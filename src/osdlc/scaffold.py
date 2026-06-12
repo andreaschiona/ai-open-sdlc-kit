@@ -48,6 +48,8 @@ def detect_codeql_languages(language):
         "C/C++": "cpp",
         "C#": "csharp",
         "Swift": "swift",
+        "React": "javascript-typescript",
+        "React TypeScript": "javascript-typescript",
     }
     return mapping.get(language, "")
 
@@ -67,33 +69,45 @@ def detect_ecosystem(build_system):
         "Go modules": "go_mod",
         "Composer": "composer",
         "Bundler": "bundler",
-        "CMake": "cmake",
-        "Mix": "mix",
+        "Mix": "hex",
+        ".NET": "nuget",
+        "SPM": "swift",
     }
     return mapping.get(build_system, "pip")
 
 
-def detect_language_setup_step(language):
+def detect_language_setup_step(language, build_system=None):
+    base_jdk = """\
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'"""
+    gradle_step = """\
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3"""
+    jdk_with_gradle = base_jdk + "\n" + gradle_step
     mapping = {
-        "Java": """\
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3""",
-        "Kotlin/Java": """\
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3""",
+        "Java": base_jdk if build_system and "Gradle" not in build_system else jdk_with_gradle,
+        "Kotlin": base_jdk if build_system and "Gradle" not in build_system else jdk_with_gradle,
+        "Kotlin/Java": base_jdk if build_system and "Gradle" not in build_system else jdk_with_gradle,
         "JavaScript": """\
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Install dependencies
+        run: npm ci""",
+        "React": """\
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Install dependencies
+        run: npm ci""",
+        "React TypeScript": """\
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -137,6 +151,14 @@ def detect_language_setup_step(language):
         with:
           elixir-version: 'latest'
           otp-version: 'latest'""",
+        "C#": """\
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'""",
+        "Swift": """\
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2""",
     }
     return mapping.get(language, "")
 
@@ -146,7 +168,7 @@ def build_template_vars(config):
     build_system = config["build_system"]
     codeql_lang = detect_codeql_languages(language)
     ecosystem = detect_ecosystem(build_system)
-    lang_setup = detect_language_setup_step(language)
+    lang_setup = detect_language_setup_step(language, build_system)
 
     l = language.lower()
     validate_java = "true" if l in ("java", "kotlin", "kotlin/java") else "false"
@@ -173,7 +195,7 @@ def build_template_vars(config):
         "architectural_notes": config.get("architectural_notes", ""),
         "model": config.get("model", "opencode/deepseek-v4-flash-free"),
         "provider_google": config.get("provider_google", ""),
-        "codeql_languages": repr(codeql_lang),
+        "codeql_languages": codeql_lang,
         "ecosystem": ecosystem,
         "language_setup": lang_setup,
         "validate_java": validate_java,

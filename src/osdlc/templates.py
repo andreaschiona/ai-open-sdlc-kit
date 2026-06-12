@@ -333,45 +333,94 @@ name: opencode
 on:
   issue_comment:
     types: [created]
-  pull_request_review_comment:
-    types: [created]
+  pull_request_review:
+    types: [submitted]
+  workflow_run:
+    workflows: ["PR Check"]
+    types: [completed]
 
 concurrency:
-  group: ${{ github.event_name }}-${{ github.event.issue.number }}
+  group: opencode-${{ github.event_name }}-${{
+    github.event.issue.number ||
+    github.event.pull_request.number ||
+    github.event.workflow_run.pull_requests[0].number ||
+    github.event.reply_to_id }}-${{
+    github.event_name == 'workflow_run' && 'auto' ||
+    contains(github.event.comment.body, '/oc') && 'cmd' ||
+    'other' }}
   cancel-in-progress: true
 
 jobs:
   opencode:
-    if: >
-      contains(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, '/opencode')
+    if: |
+      github.event_name != 'workflow_run' &&
+      github.event.comment != null &&
+      github.event.comment.author_association == 'OWNER' &&
+      (
+        contains(github.event.comment.body, ' /oc') ||
+        startsWith(github.event.comment.body, '/oc') ||
+        contains(github.event.comment.body, ' /opencode') ||
+        startsWith(github.event.comment.body, '/opencode')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 180
-
     permissions:
       id-token: write
       contents: write
       pull-requests: write
       issues: write
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          persist-credentials: true
+          persist-credentials: false
           fetch-depth: 0
 
-      - name: Configure git identity
+      - name: Configure git for push
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.email "opencode@github.actions"
-          git config user.name "opencode"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}"
+
+      - name: Install jq
+        shell: bash
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Get opencode version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
+          echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache opencode
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.opencode/bin
+          key: opencode-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
 
       - name: Install opencode
-        run: |
-          curl -fsSL https://opencode.ai/install | bash
-          echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: curl -fsSL https://opencode.ai/install | bash -s -- ${{ steps.version.outputs.version }}
 
-      - name: Detect model from comment
-        id: detect
+      - name: Add opencode to PATH
+        shell: bash
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Determine model from comment
+        id: model_select
+        shell: bash
         env:
           COMMENT: ${{ github.event.comment.body }}
         run: |
@@ -385,12 +434,142 @@ jobs:
             echo "model={model}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Run opencode
-        run: opencode github run
+      - name: Run opencode (with retry)
+        shell: bash
+        id: run_opencode
         env:
+          MODEL: ${{ steps.model_select.outputs.model }}
+          OPENCODE_TELEMETRY: false
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODEL: ${{ steps.detect.outputs.model }}
           USE_GITHUB_TOKEN: "true"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "Selected model: $MODEL"
+
+          jq --arg model "$MODEL" '.model = $model' opencode.json > opencode.tmp.json && mv opencode.tmp.json opencode.json
+          echo "Injected model '$MODEL' into opencode.json"
+
+          MAX_RETRIES=3
+          RETRY_DELAY=15
+          for i in $(seq 1 "$MAX_RETRIES"); do
+            echo "opencode run attempt $i of $MAX_RETRIES"
+            if opencode github run; then
+              echo "opencode completed successfully"
+              exit 0
+            fi
+            exit_code=$?
+            echo "opencode exit code: $exit_code"
+            if [ "$i" -eq "$MAX_RETRIES" ]; then
+              echo "All $MAX_RETRIES attempts failed, last exit code: $exit_code"
+              exit 1
+            fi
+            echo "Attempt $i failed (exit code: $exit_code), retrying in ${RETRY_DELAY}s..."
+            sleep "$RETRY_DELAY"
+          done
+
+  auto-analyze-failure:
+    if: |
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.pull_requests[0] != null &&
+      github.event.workflow_run.head_repository.fork == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: read
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Get PR number
+        id: pr
+        shell: bash
+        run: |
+          {
+            echo "number=${{ github.event.workflow_run.pull_requests[0].number }}"
+            echo "head_branch=${{ github.event.workflow_run.head_branch }}"
+            echo "head_sha=${{ github.event.workflow_run.head_sha }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Collect failure context
+        shell: bash
+        run: |
+          mkdir -p /tmp/ci-context
+          URL="/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
+          gh api "$URL" --jq '
+            .check_runs[] | select(.conclusion == "failure") |
+            "## \(.name)\\n\\n**Title:** \(.output.title // "failed")\\n\\n**Summary:**\\n\(.output.summary // "N/A")\\n\\n**Text:**\\n\(.output.text // "N/A")\\n"
+          ' > /tmp/ci-context/check-failures.md
+          gh pr diff ${{ steps.pr.outputs.number }} > /tmp/ci-context/pr-diff.diff
+          echo "Failure context collected ($(wc -l < /tmp/ci-context/check-failures.md) lines)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get opencode version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(curl -sf https://api.github.com/repos/anomalyco/opencode/releases/latest |
+            grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4 || true)
+          echo "version=${VERSION:-v1.15.10}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache opencode
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.opencode/bin
+          key: opencode-auto-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+
+      - name: Install opencode
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: curl -fsSL https://opencode.ai/install | bash -s -- ${{ steps.version.outputs.version }}
+
+      - name: Add opencode to PATH
+        shell: bash
+        run: echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Analyze failures with opencode
+        shell: bash
+        continue-on-error: true
+        env:
+          OPENCODE_TELEMETRY: false
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          opencode run --model {model} \
+            --file /tmp/ci-context/check-failures.md \
+            --file /tmp/ci-context/pr-diff.diff \
+            "CI checks on this PR (#${{ steps.pr.outputs.number }}) have failed. \
+            The attached files contain the failing check details and the PR diff. \
+            Analyze the failures and propose specific fixes." \
+            > /tmp/ci-context/analysis.md 2>&1
+
+      - name: Post analysis to PR
+        if: always() && steps.pr.outputs.number != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo '## CI Failure Analysis'
+            echo ''
+            if [ -s /tmp/ci-context/analysis.md ]; then
+              echo 'OpenCode has analyzed the check failures on this PR.'
+              echo ''
+              cat /tmp/ci-context/analysis.md
+            else
+              echo "The automatic analysis did not produce results."
+              echo "To analyze manually, comment with /oc fixCheck on this PR."
+            fi
+          } > /tmp/ci-context/body.md
+          gh pr comment ${{ steps.pr.outputs.number }} --body-file /tmp/ci-context/body.md
 """
 
 PR_CHECK_WORKFLOW = """\
@@ -410,7 +589,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -424,29 +603,57 @@ jobs:
 
       - name: Build
         run: {build_cmd}
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 7
+
+      - name: PR comment with results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: checks } = await github.rest.checks.listForRef({
+              ...context.repo,
+              ref: context.sha,
+            });
+            const summary = checks.check_runs.map(c =>
+              `- **${c.name}**: ${c.conclusion || 'in_progress'}`
+            ).join('\\n');
+            github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `## PR Check Results\\n\\n${summary}\\n\\n_Updated at ${new Date().toISOString()}_`,
+            });
 """
 
 RELEASE_WORKFLOW = """\
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     branches: [{default_branch}]
     paths-ignore:
       - '**.md'
       - '.gitignore'
-      - 'LICENSE'
-      - '.github/**'
 
 permissions:
   contents: write
   issues: write
+  id-token: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.resolve.outputs.new_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -462,35 +669,40 @@ jobs:
             COMMITS=$(git log "$LAST_TAG..HEAD" --format="%s")
           fi
           if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
-            echo "type=major" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=major" >> "$GITHUB_ENV"
           elif echo "$COMMITS" | grep -q "^feat"; then
-            echo "type=minor" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=minor" >> "$GITHUB_ENV"
           else
-            echo "type=patch" >> "$GITHUB_OUTPUT"
+            echo "BUMP_TYPE=patch" >> "$GITHUB_ENV"
           fi
 
-      - name: Update version
+      - name: Bump version
         id: version
+        shell: bash
         run: |
-          CURRENT=$(grep -oP '(?<=version=)[0-9]+[.][0-9]+[.][0-9]+' {version_file} || echo "0.0.0")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          case "${{ steps.bump.outputs.type }}" in
-            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
-            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
-            patch) PATCH=$((PATCH+1)) ;;
-          esac
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          OUTPUT=$(python -m osdlc.version update --root . 2>&1)
+          echo "update_output=$OUTPUT" >> "$GITHUB_OUTPUT"
+          NEW_VERSION=$(echo "$OUTPUT" | sed -n 's/.*-> \\([0-9]\\+\\.[0-9]\\+\\.[0-9]\\+\\).*/\\1/p')
           echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          sed -i "s/version=$CURRENT/version=$NEW_VERSION/" {version_file}
+          echo "$OUTPUT"
+
+      - name: Install dependencies
+        run: pip install pytest
+
+      - name: Lint
+        run: {lint_cmd}
 
       - name: Run tests
         id: tests
         continue-on-error: true
-        run: {test_cmd}
+        run: {test_cmd} || test $? -eq 5
+
+      - name: Build
+        run: {build_cmd}
 
       - name: Create issue on test failure
         if: steps.tests.outcome == 'failure'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             github.rest.issues.create({
@@ -505,21 +717,36 @@ jobs:
         if: steps.tests.outcome == 'failure'
         run: exit 1
 
-      - name: Build artifact
-        run: {build_cmd}
+      - name: Resolve tag collision
+        id: resolve
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          while git tag -l "v$NEW_VERSION" | grep -q .; do
+            echo "Tag v$NEW_VERSION already exists — incrementing patch"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$NEW_VERSION"
+            PATCH=$((PATCH+1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            python -m osdlc.version set "$NEW_VERSION" --root .
+          done
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Commit version bump
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add {version_file}
-          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }} [skip ci]"
-          git tag v${{ steps.version.outputs.new_version }}
+          git add "$(python -m osdlc.version detect --root . | cut -d' ' -f1)"
+          git commit -m "chore: bump version to ${{ steps.resolve.outputs.new_version }} [skip ci]"
+          git tag v${{ steps.resolve.outputs.new_version }}
+
+      - name: Push changes
+        run: |
+          git push origin {default_branch}
+          git push origin v${{ steps.resolve.outputs.new_version }}
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ steps.version.outputs.new_version }}
+          tag_name: v${{ steps.resolve.outputs.new_version }}
           generate_release_notes: true
           make_latest: true
 
@@ -529,8 +756,9 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
+          ref: v${{ needs.release.outputs.new_version }}
           fetch-depth: 0
 
       - name: Setup Python
@@ -560,30 +788,23 @@ on:
 
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze ({codeql_languages})
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [{codeql_languages}]
-
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
-          languages: ${{ matrix.language }}
+          languages: {codeql_languages}
 
-      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/autobuild@v4
 
-      - uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
+      - uses: github/codeql-action/analyze@v4
 """
 
 LINT_WORKFLOW = """\
@@ -591,28 +812,30 @@ name: Lint
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize]
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  super-lint:
+  super-linter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Super-Linter
-        uses: super-linter/super-linter@v7
+        uses: super-linter/super-linter@v8.6.0
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_ALL_CODEBASE: false
           DEFAULT_BRANCH: {default_branch}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VALIDATE_JAVA: {validate_java}
-          VALIDATE_KOTLIN: {validate_kotlin}
+          VALIDATE_KOTLIN_KT_LINT: {validate_kotlin}
+          VALIDATE_KOTLIN_BIOME: {validate_kotlin}
           VALIDATE_JAVASCRIPT_ES: {validate_javascript}
           VALIDATE_TYPESCRIPT_ES: {validate_typescript}
           VALIDATE_PYTHON: {validate_python}
@@ -622,10 +845,11 @@ jobs:
           VALIDATE_PHP: {validate_php}
           VALIDATE_YAML: true
           VALIDATE_JSON: true
-          VALIDATE_XML: {validate_xml}
+          VALIDATE_XML: true
           VALIDATE_MARKDOWN: true
           VALIDATE_GITHUB_ACTIONS: true
-          VALIDATE_PROPERTIES: {validate_properties}
+          VALIDATE_PROPERTIES: true
+          FILTER_REGEX_EXCLUDE: \\.jks$|\\.jar$|\\.keystore$
 """
 
 DEPENDABOT_YML = """\

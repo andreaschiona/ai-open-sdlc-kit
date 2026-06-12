@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import uuid
+import shutil
 import subprocess
 import pytest
 
@@ -54,7 +55,7 @@ def gh_test_repo():
             ["gh", "repo", "delete", f"{username}/{repo_name}", "--yes"],
             capture_output=True, timeout=30,
         )
-        subprocess.run(["rm", "-rf", clone_dir], capture_output=True, timeout=30)
+        shutil.rmtree(clone_dir, ignore_errors=True)
 
 
 class TestE2EGitHubCycle:

@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 
-KIT_VERSION = "0.3.3"
+KIT_VERSION = "0.5.0"
 
 VERSION_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
@@ -31,7 +31,8 @@ def detect_version_file(root="."):
 
 
 def read_version(path, fmt):
-    content = open(path, "r", encoding="utf-8").read()
+    with open(path, "r", encoding="utf-8") as fh:
+        content = fh.read()
     if fmt == "version_txt":
         m = re.search(r"^version\s*=\s*(\S+)", content, re.MULTILINE)
         if m:
@@ -68,7 +69,8 @@ def read_version(path, fmt):
 
 
 def write_version(path, fmt, new_version):
-    content = open(path, "r", encoding="utf-8").read()
+    with open(path, "r", encoding="utf-8") as fh:
+        content = fh.read()
     if fmt == "version_txt":
         content_new = re.sub(
             r"^version\s*=\s*\S+",
@@ -152,7 +154,8 @@ def write_version(path, fmt, new_version):
     else:
         raise ValueError(f"Unknown format: {fmt}")
 
-    open(path, "w", encoding="utf-8").write(content_new)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(content_new)
 
 
 def get_last_tag():
