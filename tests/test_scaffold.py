@@ -84,8 +84,8 @@ class TestDetectCodeqlLanguages:
         assert detect_codeql_languages("Go") == "go"
         assert detect_codeql_languages("Rust") == "rust"
 
-    def test_unknown_falls_back_to_python(self):
-        assert detect_codeql_languages("UnknownLang") == "python"
+    def test_unknown_returns_empty(self):
+        assert detect_codeql_languages("UnknownLang") == ""
 
 
 class TestDetectEcosystem:
