@@ -64,4 +64,4 @@ Always branch from `main`.
 
 ## Version Configuration
 
-Version is stored in: `VERSION`
+Version is stored in: `pyproject.toml`

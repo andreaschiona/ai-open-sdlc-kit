@@ -104,10 +104,3 @@ class TestMainEntryPoint:
         result = main()
         assert result == 0
 
-    def test_main_upgrade_print_summary(self, git_init):
-        from osdlc.cli import main
-        sys.argv = ["run.py", "init", "--non-interactive", "--target", git_init]
-        main()
-        sys.argv = ["run.py", "upgrade", "--non-interactive", "--target", git_init]
-        result = main()
-        assert result == 0

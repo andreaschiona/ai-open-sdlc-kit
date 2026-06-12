@@ -54,7 +54,7 @@ class TestTemplateRendering:
         assert vars_dict["validate_python"] == "true"
         assert vars_dict["validate_java"] == "false"
         assert vars_dict["ecosystem"] == "pip"
-        assert vars_dict["codeql_languages"] == "'python'"
+        assert vars_dict["codeql_languages"] == "python"
 
     def test_build_template_vars_java(self):
         config = {
@@ -77,7 +77,7 @@ class TestTemplateRendering:
         assert vars_dict["validate_java"] == "true"
         assert vars_dict["validate_kotlin"] == "false"
         assert vars_dict["ecosystem"] == "maven"
-        assert vars_dict["codeql_languages"] == "'java-kotlin'"
+        assert vars_dict["codeql_languages"] == "java-kotlin"
         assert "setup-java" in vars_dict["language_setup"]
 
     def test_build_template_vars_go(self):

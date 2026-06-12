@@ -46,3 +46,6 @@ test = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+markers = [
+    "e2e: End-to-end tests that require GitHub and gh CLI",
+]

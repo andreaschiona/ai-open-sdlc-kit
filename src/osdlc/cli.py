@@ -18,7 +18,11 @@ def confirm(prompt_text, default=True):
     user_input = input(f"{prompt_text} [{default_str}]: ").strip().lower()
     if not user_input:
         return default
-    return user_input.startswith("y")
+    if user_input.startswith("n"):
+        return False
+    if user_input.startswith("y"):
+        return True
+    return default
 
 
 def print_banner():
@@ -241,9 +245,10 @@ def run_upgrade(root, args):
     detected = detect_project_type(root)
     ext_lang = suggest_language_by_extension(root)
 
-    if not args.non_interactive:
+    if args.non_interactive:
         print("Running upgrade in non-interactive mode (using detected configuration).")
-        print("Pass --non-interactive explicitly to silence this message.")
+    else:
+        print("Running upgrade with auto-detected configuration (pass --non-interactive to skip this message).")
 
     if detected:
         config = detected.copy()
