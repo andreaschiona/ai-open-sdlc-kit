@@ -15,14 +15,15 @@ def prompt(prompt_text, default=None):
 
 def confirm(prompt_text, default=True):
     default_str = "Y/n" if default else "y/N"
-    user_input = input(f"{prompt_text} [{default_str}]: ").strip().lower()
-    if not user_input:
-        return default
-    if user_input.startswith("n"):
-        return False
-    if user_input.startswith("y"):
-        return True
-    return default
+    while True:
+        user_input = input(f"{prompt_text} [{default_str}]: ").strip().lower()
+        if not user_input:
+            return default
+        if user_input in ("y", "yes"):
+            return True
+        if user_input in ("n", "no"):
+            return False
+        print(f"  Please enter 'y'/'yes' or 'n'/'no'.")
 
 
 def print_banner():
