@@ -27,7 +27,7 @@
       }
     }
   },
-  "model": "opencode/deepseek-v4-flash-free",
+  "model": "opencode/big-pickle",
   "command": {
     "resolve-issue": {
       "description": "Resolve a GitHub issue: analyze, implement, PR, wait for checks, merge to main",
