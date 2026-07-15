@@ -245,10 +245,11 @@ def run_upgrade(root, args):
     detected = detect_project_type(root)
     ext_lang = suggest_language_by_extension(root)
 
-    if args.non_interactive:
-        print("Running upgrade in non-interactive mode (using detected configuration).")
-    else:
-        print("Running upgrade with auto-detected configuration (pass --non-interactive to skip this message).")
+    if not args.non_interactive:
+        print("Interactive mode not supported for upgrade. Use --non-interactive flag.")
+        return 1
+
+    print("Running upgrade in non-interactive mode (using detected configuration).")
 
     if detected:
         config = detected.copy()
