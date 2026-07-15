@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import hashlib
 from osdlc.templates import ALL_TEMPLATES
@@ -214,11 +215,13 @@ def build_template_vars(config):
 
 
 def render_template(template, vars_dict):
-    result = template
-    for key, value in vars_dict.items():
-        placeholder = "{" + key + "}"
-        result = result.replace(placeholder, str(value))
-    return result
+    def _replace(match):
+        key = match.group(1)
+        if key in vars_dict:
+            return str(vars_dict[key])
+        return match.group(0)
+
+    return re.sub(r"\{(\w+)\}", _replace, template)
 
 
 def scaffold(config, root=".", force=False):
