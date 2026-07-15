@@ -100,6 +100,7 @@ class TestDetectEcosystem:
         assert detect_ecosystem("PEP 621") == "pip"
         assert detect_ecosystem("setuptools") == "pip"
         assert detect_ecosystem("pip") == "pip"
+        assert detect_ecosystem("CMake") == "nuget"
 
     def test_unknown_falls_back_to_pip(self):
         assert detect_ecosystem("Unknown") == "pip"

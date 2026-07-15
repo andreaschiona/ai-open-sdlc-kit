@@ -69,6 +69,7 @@ def detect_ecosystem(build_system):
         "Go modules": "go_mod",
         "Composer": "composer",
         "Bundler": "bundler",
+        "CMake": "nuget",
         "Mix": "hex",
         ".NET": "nuget",
         "SPM": "swift",
