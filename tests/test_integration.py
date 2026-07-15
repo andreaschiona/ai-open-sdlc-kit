@@ -224,7 +224,7 @@ class TestPrerequisites:
         )
         with open(os.path.join(git_init, ".github", "workflows", "opencode.yml")) as f:
             content = f.read()
-        assert "actions/checkout@v6" in content
+        assert "actions/checkout@v7" in content
         assert "https://opencode.ai/install" in content
 
     def test_github_token_secret_documented(self, git_init):
