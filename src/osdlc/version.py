@@ -4,7 +4,7 @@ import json
 import subprocess
 import sys
 
-KIT_VERSION = "0.5.0"
+KIT_VERSION = "0.5.3"
 
 VERSION_PATTERN = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
